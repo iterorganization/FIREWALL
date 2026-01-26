@@ -14,9 +14,11 @@
 Solver::Solver(const Material& material) : mat(material) {}
 
 /**
- * Build in depth grid on which we evaluate the temperature profile.
- * The grid is bi-uniform.
- * x : Origina. 
+ * Build the vectors of inter-node distances and cell volumes.
+ *
+ * x:       In depth grid.
+ * h_face:  Vector containing inter-node distances.
+ * dx_cell: Vector containing the volumes around each node.
  */
 void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<double>& h_face, std::vector<double>& dx_cell) {
     size_t N = x.size();
@@ -45,7 +47,16 @@ void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<dou
     }
 }
 
-
+/**
+ * Assembles the source term.
+ *
+ * dE_dx:       Matrix containing the energy deposition profiles for each incident macroparticle.
+ * weights:     Vector containing the weight (number of physical particles) for each incident macroparticle.
+ * active_mask: Vector containing the time intervals over which a macroparticle deposits energy.
+ * N_x:         Number of nodes in the in depth grid.
+ * N_p:         Number of macroparticles.
+ * src:         Source term.
+ */
 void Solver::compute_source(
         const std::vector<double>& dE_dx, 
         const std::vector<double>& weights, 
@@ -74,10 +85,17 @@ void Solver::compute_source(
 /**
  * Assembles the tridiagonal system corre.
  *
- * a: Vector containing the a_i values.
- * b: Vector containing the b_i values.
- * c: Vector containing the c_i values.
- * d: Vector containing the d_i values.
+ * T_guess:      Guess of the solution in the fixed point iteration.
+ * Tn:           Actual temperature profile.
+ * rho_cp_nodes: Vector containing the values of rho*c_p.
+ * src:          Source term.
+ * dt:           Time step.
+ * h_face:       Vector containing inter-node distances.
+ * dx_cell:      Vector containing the volumes around each node.
+ * a:            Vector containing the a_i values.
+ * b:            Vector containing the b_i values.
+ * c:            Vector containing the c_i values.
+ * d:            Vector containing the d_i values.
  */
 void Solver::assemble_tridiag(
         const std::vector<double>& T_guess,
