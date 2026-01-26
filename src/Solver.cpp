@@ -1,0 +1,342 @@
+/**
+ * Module for solving the 1D nonlinear heat equation for a given triangle.
+ */
+
+#include "Solver.h"
+#include <cmath>
+#include <algorithm>
+#include <iostream>
+#include <omp.h>
+
+/**
+ * Constructor.
+ */
+Solver::Solver(const Material& material) : mat(material) {}
+
+/**
+ * Build in depth grid on which we evaluate the temperature profile.
+ * The grid is bi-uniform.
+ * x : Origina. 
+ */
+void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<double>& h_face, std::vector<double>& dx_cell) {
+    size_t N = x.size();
+    if (N > 1) {
+        h_face.resize(N - 1);
+        for (size_t f = 0; f < N - 1; ++f) {
+            h_face[f] = x[f+1] - x[f];
+        }
+    } else {
+        h_face.clear();
+    }
+    
+    dx_cell.resize(N);
+    for (size_t i = 0; i < N; ++i) {
+        if (N == 1) {
+            dx_cell[i] = 0.0;
+        } else {
+            if (i == 0) {
+                dx_cell[i] = 0.5 * h_face[0];
+            } else if (i == N - 1) {
+                dx_cell[i] = 0.5 * h_face[N - 2];
+            } else {
+                dx_cell[i] = 0.5 * (h_face[i - 1] + h_face[i]);
+            }
+        }
+    }
+}
+
+
+void Solver::compute_source(
+        const std::vector<double>& dE_dx, 
+        const std::vector<double>& weights, 
+        const std::vector<bool>& active_mask, 
+        double coeff, 
+        int N_x, 
+        int N_p, 
+        std::vector<double>& src
+) {
+    src.assign(N_x, 0.0);
+    
+    // Parallelize over spatial grid
+    #pragma omp parallel for
+    for (int i = 0; i < N_x; ++i) {
+        double s = 0.0;
+        
+        for (int j = 0; j < N_p; ++j) {
+            if (active_mask[j]) {
+                s += dE_dx[i * N_p + j] * weights[j];
+            }
+        }
+        src[i] = coeff * s;
+    }
+}
+
+/**
+ * Assembles the tridiagonal system corre.
+ *
+ * a: Vector containing the a_i values.
+ * b: Vector containing the b_i values.
+ * c: Vector containing the c_i values.
+ * d: Vector containing the d_i values.
+ */
+void Solver::assemble_tridiag(
+        const std::vector<double>& T_guess,
+        const std::vector<double>& Tn,
+        const std::vector<double>& rho_cp_nodes,
+        const std::vector<double>& src,
+        double dt,
+        const std::vector<double>& h_face,
+        const std::vector<double>& dx_cell,
+        std::vector<double>& a,
+        std::vector<double>& b,
+        std::vector<double>& c,
+        std::vector<double>& d
+) {
+    size_t N = T_guess.size();
+    a.assign(N, 0.0);
+    b.assign(N, 0.0);
+    c.assign(N, 0.0);
+    d.assign(N, 0.0);
+    
+    // Get k at nodes
+    std::vector<double> k_nodes(N);
+
+    for(size_t i=0; i<N; ++i) k_nodes[i] = mat.getK(T_guess[i]);
+    
+    std::vector<double> k_face;
+    if (N > 1) {
+        k_face.resize(N - 1);
+        for (size_t f = 0; f < N - 1; ++f) {
+            double kL = k_nodes[f];
+            double kR = k_nodes[f+1];
+            if (kL > 0.0 && kR > 0.0) {
+                k_face[f] = 2.0 * kL * kR / (kL + kR);
+            } else {
+                k_face[f] = 0.5 * (kL + kR);
+            }
+        }
+    }
+    
+    for (size_t i = 0; i < N; ++i) {
+        double b_i = rho_cp_nodes[i];
+        
+        if (i > 0) {
+            double hL = h_face[i-1];
+            double dx_i = dx_cell[i];
+            double val = dt * (k_face[i-1] / (dx_i * hL));
+            a[i] = -val;
+            b_i += val;
+        } else {
+            a[i] = 0.0;
+        }
+        
+        if (i < N - 1) {
+            double hR = h_face[i];
+            double dx_i = dx_cell[i];
+            double val = dt * (k_face[i] / (dx_i * hR));
+            c[i] = -val;
+            b_i += val;
+        } else {
+            c[i] = 0.0;
+        }
+        
+        b[i] = b_i;
+        d[i] = rho_cp_nodes[i] * Tn[i] + dt * src[i];
+    }
+    
+    // BCs
+    if (N >= 2) {
+        b[0] = 1.0; c[0] = -1.0; a[0] = 0.0; d[0] = 0.0;
+        b[N-1] = 1.0; a[N-1] = -1.0; c[N-1] = 0.0; d[N-1] = 0.0;
+    } else {
+        b[0] = 1.0; a[0] = 0.0; c[0] = 0.0; d[0] = Tn[0];
+    }
+}
+
+/**
+ * Solves the tridiagonal system using the Thomas algorithm.
+ *
+ * a: Vector containing the a_i values.
+ * b: Vector containing the b_i values.
+ * c: Vector containing the c_i values.
+ * d: Vector containing the d_i values.
+ */
+std::vector<double> Solver::thomas_solve(
+    const std::vector<double>& a,
+    const std::vector<double>& b,
+    const std::vector<double>& c,
+    const std::vector<double>& d
+) {
+    size_t N = b.size();
+    std::vector<double> cp(N);
+    std::vector<double> dp(N);
+    std::vector<double> x(N);
+    
+    double denom = b[0];
+    if (std::abs(denom) < 1e-30) denom = 1e-30;
+    
+    cp[0] = c[0] / denom;
+    dp[0] = d[0] / denom;
+    
+    for (size_t i = 1; i < N; ++i) {
+        denom = b[i] - a[i] * cp[i-1];
+        if (std::abs(denom) < 1e-30) denom = 1e-30;
+        if (i < N - 1) {
+            cp[i] = c[i] / denom;
+        }
+        dp[i] = (d[i] - a[i] * dp[i-1]) / denom;
+    }
+    
+    x[N-1] = dp[N-1];
+    for (int i = N - 2; i >= 0; --i) {
+        x[i] = dp[i] - cp[i] * x[i+1];
+    }
+    return x;
+}
+
+/**
+ * Perform an implicit step of the solver.
+ *
+ * Tn:      Actual temperature profile.
+ * src:     Time dependent source term.
+ * dt:      Time step.
+ * h_face:  Vector containing inter-node distances.
+ * dx_cell: Vector containing the volumes around each node.
+ */
+void Solver::implicit_step(
+    std::vector<double>& Tn, 
+    const std::vector<double>& src, 
+    double dt, 
+    const std::vector<double>& h_face, 
+    const std::vector<double>& dx_cell
+) {
+    size_t N = Tn.size();
+    std::vector<double> T_guess = Tn; // Copy
+    std::vector<double> T_new;
+    
+    std::vector<double> rho_nodes(N);
+    std::vector<double> cp_nodes(N);
+    std::vector<double> rho_cp_nodes(N);
+    
+    std::vector<double> a, b, c, d;
+    
+    int max_iter = 20;
+    double tol = 1e-6;
+    
+    for (int m = 0; m < max_iter; ++m) {
+        for(size_t i=0; i<N; ++i) {
+            rho_nodes[i] = mat.getRho(T_guess[i]);
+            cp_nodes[i] = mat.getCp(T_guess[i]);
+            rho_cp_nodes[i] = rho_nodes[i] * cp_nodes[i];
+        }
+        
+        assemble_tridiag(T_guess, Tn, rho_cp_nodes, src, dt, h_face, dx_cell, a, b, c, d);
+        T_new = thomas_solve(a, b, c, d);
+        
+        double maxdiff = 0.0;
+        for (size_t i = 0; i < N; ++i) {
+            double diff = std::abs(T_new[i] - T_guess[i]);
+            if (diff > maxdiff) maxdiff = diff;
+        }
+        
+        T_guess = T_new;
+        if (maxdiff < tol) break;
+    }
+
+    Tn = T_guess;
+}
+
+/**
+ * Solve 1D nonlinear heat equation.
+ *
+ * dE_dx:      Matrix containing the energy deposition profiles for each incident macroparticle.
+ * weights:    Vector containing the weight (number of physical particles) for each incident macroparticle.
+ * coll_times: Vector containing the time of impact of each macroparticle.
+ * depths:     In depth grid on which the Temperature profile is evaluated.
+ * params:     Parameters used for the simulation.
+ * out_T:      Matrix containing the temperature profile for every time step.
+ * out_times:  Vector containing the times at which the temperature profile is evaluated.
+ * out_Nx:     Number of nodes in the in depth grid.
+ * out_Nt:     Number of time points at which the temperature profile is evaluated.
+ */
+void Solver::solve(
+    const std::vector<double>& dE_dx, 
+    const std::vector<double>& weights, 
+    const std::vector<double>& coll_times, 
+    const std::vector<double>& depths, 
+    const SimulationParams& params, 
+    std::vector<double>& out_T, 
+    std::vector<double>& out_times, 
+    int& out_Nx, 
+    int& out_Nt
+) {
+    
+    double dt_small = params.dt_small;
+    double dt_large = params.dt_large;
+    double t_start = params.t_start;
+    double t_end = params.t_end;
+    double t_interm = params.t_interm;
+    
+    double dt = dt_small;
+    int N_t = 0;
+    
+    if (t_interm <= t_start || t_interm >= t_end || t_interm == 0.0) {
+        N_t = (int)(std::ceil((t_end - t_start) / dt)) + 1;
+        t_interm = t_end + 1.0; 
+    } else {
+        int Nt1 = (int)(std::ceil((t_interm - t_start) / dt_small));
+        int Nt2 = (int)(std::ceil((t_end - t_interm) / dt_large));
+        N_t = Nt1 + Nt2 + 1;
+    }
+    
+    int N_p = coll_times.size();
+    int N_x = depths.size();
+    
+    std::vector<double> h_face, dx_cell;
+    build_two_region_grid(depths, h_face, dx_cell);
+    
+    std::vector<double> T(N_x, params.T_ini);
+    std::vector<double> Tn(N_x);
+    
+    // Output allocation
+    out_Nx = N_x;
+    out_Nt = N_t;
+    out_T.resize(N_x * N_t);
+    out_times.resize(N_t);
+    
+    // Save T[:, 0]
+    for(int i=0; i<N_x; ++i) out_T[i] = T[i]; 
+    
+    // Save t=0
+    for(int i=0; i<N_x; ++i) out_T[i * N_t + 0] = T[i];
+    out_times[0] = t_start;
+    
+    double t_now = t_start;
+    int n = 1;
+    
+    std::vector<bool> active_mask(N_p);
+    std::vector<double> src(N_x);
+    
+    while (n < N_t) {
+        if (t_now >= t_interm) dt = dt_large;
+        else dt = dt_small;
+        
+        t_now += dt;
+        Tn = T; // Copy T to Tn
+        
+        // Active mask
+        for(int j=0; j<N_p; ++j) {
+            active_mask[j] = (coll_times[j] <= t_now) && (t_now <= (coll_times[j] + params.t_dep));
+        }
+        
+        compute_source(dE_dx, weights, active_mask, params.coeff, N_x, N_p, src);
+        
+        implicit_step(T, src, dt, h_face, dx_cell); 
+        print_bool = false;
+        // Store
+        for(int i=0; i<N_x; ++i) out_T[i * N_t + n] = T[i];
+        out_times[n] = t_now;
+        
+        n++;
+    }
+}
