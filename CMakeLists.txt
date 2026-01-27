@@ -1,3 +1,6 @@
+set(CMAKE_CXX_COMPILER g++-15)
+set(CMAKE_C_COMPILER gcc-15)
+
 cmake_minimum_required(VERSION 3.10)
 project(HeatSimulation LANGUAGES CXX)
 

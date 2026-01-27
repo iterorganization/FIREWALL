@@ -1,19 +1,20 @@
-#include "Solver.h"
-#include "Interpolator.h"
-#include "Utils.h"
-#include <iostream>
-#include <vector>
-#include <numeric>
+#include <H5Cpp.h>
+
 #include <algorithm>
 #include <cmath>
-#include <H5Cpp.h>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+#include "Interpolator.h"
+#include "Solver.h"
+#include "Utils.h"
 
 struct Particle {
     int id;
     double t_loss;
     double weight;
 };
-
 
 int main(int argc, char* argv[]) {
     try {
@@ -22,12 +23,11 @@ int main(int argc, char* argv[]) {
         std::string interpPath = "../../data/interpolation_data.h5";
         // --- Load Data ---
         std::cout << "Loading data..." << std::endl;
-        
-        
+
         // Particles
         H5::H5File partFile(partPath, H5F_ACC_RDONLY);
         H5::Group partGroup = partFile.openGroup("groups/001");
-        
+
         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
         std::vector<double> t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
         std::vector<double> weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
@@ -35,109 +35,110 @@ int main(int argc, char* argv[]) {
         double energy = energy_vec[0];
         std::vector<double> angle_vec = Utils::readH5DoubleDatasetGroup(partGroup, "angle");
         double angle = angle_vec[0];
-        
+
         size_t n_particles = i_elm.size();
         std::vector<Particle> particles(n_particles);
-        
-        for(size_t i=0; i<n_particles; ++i) {
+
+        for (size_t i = 0; i < n_particles; ++i) {
             particles[i].id = -i_elm[i];
             particles[i].t_loss = t_loss[i];
             particles[i].weight = weight[i];
 
-            if (i == n_particles -1){
+            if (i == n_particles - 1) {
                 std::cout << particles[i].t_loss << std::endl;
             }
         }
-        
+
         // --- Simulation Parameters ---
         double c = 3e8;
         double m_0 = 0.000548;
         double conv_factor = 1.66e-27 * 1e-6 * 6.24e18;
-        double conv_factor2 = 1.60217663e-19 * 1e6 * 1e3; // MeV/mm to J/m
-        
+        double conv_factor2 = 1.60217663e-19 * 1e6 * 1e3;  // MeV/mm to J/m
+
         double L = 24e-3;
-        double L_1 = L/30.0;
+        double L_1 = L / 30.0;
         double L_2 = L - L_1;
-        
-        //double delta_x1 = 1.5e-7;
-        //double delta_x2 = 1.5e-4; //1.5e-4
+
+        // double delta_x1 = 1.5e-7;
+        // double delta_x2 = 1.5e-4; //1.5e-4
 
         double delta_x1 = 2e-6;
-        double delta_x2 = 2e-6; //1.5e-4
-        
-        int N_x1 = (int)(L_1/delta_x1);
-        int N_x2 = (int)(L_2/delta_x2);
-        
+        double delta_x2 = 2e-6;  // 1.5e-4
+
+        int N_x1 = (int)(L_1 / delta_x1);
+        int N_x2 = (int)(L_2 / delta_x2);
+
         SimulationParams params;
         params.T_ini = 300;
         params.dt_small = 1e-7;
         params.dt_large = 1e-3;
-        //params.t_dep = 10 * params.dt_small;
+        // params.t_dep = 10 * params.dt_small;
         params.t_dep = 10 * params.dt_small;
         params.t_start = 0.0;
-        params.t_end = 1e-4; //1e-3
+        params.t_end = 1e-4;  // 1e-3
         params.t_interm = 0.0;
-        
+
         // --- Prepare Interpolator and Material ---
         Interpolator interpolator(interpPath);
         Material material;
         Solver solver(material);
 
         int wid = 1;
-        
+
         // Extract data for this wall element
         std::vector<double> p_coll_times(n_particles);
         std::vector<double> p_weights(n_particles);
         // Momenta and Normals
 
-                
         double area = 1e-4;
         double coeff_num = 1.0 / (area * params.t_dep);
         params.coeff = coeff_num;
-        
+
         std::vector<double> p_energies(n_particles);
         std::vector<double> p_angles(n_particles);
-        
-        for(size_t k=0; k<n_particles; ++k) {
+
+        for (size_t k = 0; k < n_particles; ++k) {
             const Particle& p = particles[k];
             p_coll_times[k] = p.t_loss;
             p_weights[k] = p.weight;
-            
+
             // Angle
             p_angles[k] = angle;
-            
+
             // Energy
             p_energies[k] = energy;
         }
-        
+
         // Interpolate Profile
-        
-        
+
         std::vector<double> target_depths_mm(N_x1 + N_x2);
         double dx1_mm = delta_x1 * 1000.0;
         double dx2_mm = delta_x2 * 1000.0;
-        
+
         target_depths_mm[0] = 0.0;
-        for(int d=0; d<(N_x1+N_x2)-1; ++d) {
+        for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
             double spacing;
-            if(d < N_x1 - 1) spacing = dx1_mm;
-            else if (d == N_x1 - 1) spacing = 0.5 * (dx1_mm + dx2_mm);
-            else spacing = dx2_mm;
-            target_depths_mm[d+1] = target_depths_mm[d] + spacing;
+            if (d < N_x1 - 1)
+                spacing = dx1_mm;
+            else if (d == N_x1 - 1)
+                spacing = 0.5 * (dx1_mm + dx2_mm);
+            else
+                spacing = dx2_mm;
+            target_depths_mm[d + 1] = target_depths_mm[d] + spacing;
         }
-        
+
         std::vector<double> dE_dx(target_depths_mm.size() * n_particles);
-        
-        for(size_t j=0; j<n_particles; ++j) {
+
+        for (size_t j = 0; j < n_particles; ++j) {
             // Interpolate for this particle
-            std::vector<double> prof = interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
-            
+            std::vector<double> prof =
+                interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
+
             // Store in dE_dx (Depth-Major)
-            for(size_t d=0; d<prof.size(); ++d) {
+            for (size_t d = 0; d < prof.size(); ++d) {
                 dE_dx[d * n_particles + j] = prof[d] * conv_factor2;
             }
         }
-
 
         // 1. Calculate weighted dE/dx sum across all particles at each depth
         std::vector<double> total_dE_dx(target_depths_mm.size(), 0.0);
@@ -155,11 +156,11 @@ int main(int argc, char* argv[]) {
 
         for (size_t d = 1; d < target_depths_mm.size(); ++d) {
             // Distance in meters (target_depths_mm is in mm)
-            double delta_x_m = (target_depths_mm[d] - target_depths_mm[d-1]) * 1e-3;
-            
+            double delta_x_m = (target_depths_mm[d] - target_depths_mm[d - 1]) * 1e-3;
+
             // Trapezoidal rule for dE/dx (J/m) over dx (m)
-            double avg_dE_dx = (total_dE_dx[d] + total_dE_dx[d-1]) / 2.0;
-            
+            double avg_dE_dx = (total_dE_dx[d] + total_dE_dx[d - 1]) / 2.0;
+
             total_sum_joules += avg_dE_dx * delta_x_m;
             cumulative_energy[d] = total_sum_joules;
         }
@@ -167,47 +168,50 @@ int main(int argc, char* argv[]) {
         // 3. Output the result
         std::cout << "Total Energy Deposited: " << total_sum_joules << " Jul" << std::endl;
 
-            
         // Solve Heat Eq
         std::vector<double> out_T, out_times;
         int out_Nx, out_Nt;
-        
+
         std::vector<double> depths_m(target_depths_mm.size());
-        for(size_t d=0; d<depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
-        solver.solve(dE_dx, p_weights, p_coll_times, depths_m, params, out_T, out_times, out_Nx, out_Nt);
+        for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
+        solver.solve(dE_dx, p_weights, p_coll_times, depths_m, params, out_T, out_times, out_Nx,
+                     out_Nt);
         try {
             std::string s = std::to_string(energy);
             s.erase(s.find_last_not_of('0') + 1, std::string::npos);
-            if(s.back() == '.') s.pop_back();
+            if (s.back() == '.') s.pop_back();
 
             std::string outPath = "simulation_results_random" + std::to_string(n_particles) + ".h5";
             H5::H5File outFile(outPath, H5F_ACC_TRUNC);
-            
 
             // 1. Save 1D Arrays (Times and Depths)
             hsize_t time_dims[1] = {(hsize_t)out_Nt};
             H5::DataSpace time_space(1, time_dims);
-            H5::DataSet time_ds = outFile.createDataSet("times", H5::PredType::NATIVE_DOUBLE, time_space);
+            H5::DataSet time_ds =
+                outFile.createDataSet("times", H5::PredType::NATIVE_DOUBLE, time_space);
             time_ds.write(out_times.data(), H5::PredType::NATIVE_DOUBLE);
 
             hsize_t depth_dims[1] = {(hsize_t)out_Nx};
             H5::DataSpace depth_space(1, depth_dims);
-            H5::DataSet depth_ds = outFile.createDataSet("depths", H5::PredType::NATIVE_DOUBLE, depth_space);
+            H5::DataSet depth_ds =
+                outFile.createDataSet("depths", H5::PredType::NATIVE_DOUBLE, depth_space);
             depth_ds.write(depths_m.data(), H5::PredType::NATIVE_DOUBLE);
 
-            // 2. Save 2D Temperature Grid 
-            hsize_t temp_dims[2] = {(hsize_t)out_Nx, (hsize_t)out_Nt}; 
+            // 2. Save 2D Temperature Grid
+            hsize_t temp_dims[2] = {(hsize_t)out_Nx, (hsize_t)out_Nt};
             H5::DataSpace temp_space(2, temp_dims);
-            
-            H5::DataSet temp_ds = outFile.createDataSet("temperature", H5::PredType::NATIVE_DOUBLE, temp_space);
+
+            H5::DataSet temp_ds =
+                outFile.createDataSet("temperature", H5::PredType::NATIVE_DOUBLE, temp_space);
             temp_ds.write(out_T.data(), H5::PredType::NATIVE_DOUBLE);
 
-            std::cout << "Results successfully saved to " << outPath << " (Layout: Depth x Time)" << std::endl;
+            std::cout << "Results successfully saved to " << outPath << " (Layout: Depth x Time)"
+                      << std::endl;
 
         } catch (H5::Exception& e) {
             std::cerr << "Error writing HDF5: " << e.getDetailMsg() << std::endl;
         }
-        
+
     } catch (H5::Exception& e) {
         std::cerr << "HDF5 Error: " << e.getDetailMsg() << std::endl;
         return 1;
@@ -215,6 +219,6 @@ int main(int argc, char* argv[]) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }
-    
+
     return 0;
 }
