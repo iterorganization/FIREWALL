@@ -28,14 +28,23 @@ struct Particle {
     double vx, vy, vz;
 };
 
-// Sort ascending by ID (to match Python argsort on positive values)
-bool compareParticles(const Particle& a, const Particle& b) { return a.id < b.id; }
-
 struct Result {
     int wall_id;
     double surf_temp;
     std::vector<double> snaps;
 };
+
+namespace PhysConst {
+    // Physical constants are best defined as constexpr
+    constexpr double c      = 299'792'458.0;      // Speed of light (m/s) exact
+    constexpr double m_e_u  = 0.000548579909;     // Electron mass in atomic units (u)
+    constexpr double e      = 1.602176634e-19;    // Elementary charge (C)
+    constexpr double m_u_kg = 1.66053906660e-27;  // 1 atomic mass unit in kg
+    
+    // Conversion factors can be calculated by the compiler
+    constexpr double J_to_eV = 1.0 / e;           // Joules to eV conversion
+    constexpr double eV_to_J = e;                 // eV to Joules
+}
 
 void printUsage(const char* progName) {
     std::cout << "Usage: " << progName << " [options]\n"
@@ -112,17 +121,6 @@ int main(int argc, char* argv[]) {
                   << "  Interp File: " << interpPath << "\n"
                   << "  Output File: " << outPath << "\n";
 
-        // --- Load Config ---
-        ConfigParser config;
-        // Check if config file exists before loading, or let it throw
-        std::ifstream f(configPath.c_str());
-        if (f.good()) {
-            config.load(configPath);
-            std::cout << "Loaded configuration from " << configPath << "\n";
-        } else {
-            std::cout << "Config file " << configPath << " not found, using defaults.\n";
-        }
-
         // --- Load Data ---
         std::cout << "Loading data..." << std::endl;
 
@@ -165,7 +163,7 @@ int main(int argc, char* argv[]) {
 
         // --- Sort and Filter ---
         std::cout << "Sorting..." << std::endl;
-        std::sort(particles.begin(), particles.end(), compareParticles);
+        std::sort(particles.begin(), particles.end(), [](const Particle& a, const Particle& b) { return a.id < b.id; });
 
         // Find first non-zero ID
         auto it_first_nonzero = std::find_if(particles.begin(), particles.end(), [](const Particle& p) { return p.id != 0; });
@@ -196,35 +194,13 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // --- Simulation Parameters ---
-        double c = 3e8;
-        double m_0 = 0.000548;
-        double conv_factor = 1.66e-27 * 1e-6 * 6.24e18;
-        double conv_factor2 = 1.6022e-19 * 1e6 * 1e3;
+        SimulationParams params(configPath);
 
-        double L = 24e-3;
-        double L_1 = L / 10.0;
-        double L_2 = L - L_1;
+        double L_1 = params.L / params.L_sub;
+        double L_2 = params.L - L_1;
 
-        double delta_x1 = 1.5e-6;
-        double delta_x2 = 1.5e-4;
-
-        int N_x1 = static_cast<int>(L_1 / delta_x1);
-        int N_x2 = static_cast<int>(L_2 / delta_x2);
-
-        SimulationParams params;
-        // Default values
-        params.T_ini = 300;
-        params.dt_small = 1e-7;
-        params.dt_large = 1e-3;
-        params.t_dep = 10 * params.dt_small;
-        params.t_start = 0.05125;
-        params.t_end = 0.0514;
-        params.t_interm = 0;
-
-        // Load from config (overrides defaults if key exists)
-        params.load(config);
-
+        int N_x1 = static_cast<int>(L_1 / params.delta_x1);
+        int N_x2 = static_cast<int>(L_2 / params.delta_x2);
         // --- Prepare Interpolator and Material ---
         Interpolator interpolator(interpPath);
         Material material;
@@ -296,9 +272,7 @@ int main(int argc, char* argv[]) {
             normal[2] /= norm_len;
 
             double area = 0.5 * norm_len;
-            double coeff_num = 1.0 / (area * params.t_dep);
-            SimulationParams local_params = params;
-            local_params.coeff = coeff_num;
+            double coeff = 1.0 / (area * params.t_dep);
 
             std::vector<double> p_energies(count);
             std::vector<double> p_angles(count);
@@ -319,9 +293,9 @@ int main(int argc, char* argv[]) {
 
                 // Energy
                 // (sqrt((p*c)^2 + (m0*c^2)^2) - m0*c^2) * conv
-                double pc = p_norm * c;
-                double m0c2 = m_0 * c * c;
-                double E = (std::sqrt(pc * pc + m0c2 * m0c2) - m0c2) * conv_factor;
+                double pc = p_norm * PhysConst::c;
+                double m0c2 = PhysConst::m_e_u * PhysConst::c * PhysConst::c;
+                double E = (std::sqrt(pc * pc + m0c2 * m0c2) - m0c2) * PhysConst::J_to_eV;
                 p_energies[k] = E;
             }
 
@@ -333,17 +307,17 @@ int main(int argc, char* argv[]) {
             for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
                 double spacing;
                 if (d < N_x1 - 1)
-                    spacing = delta_x1;
+                    spacing = params.delta_x1;
                 else if (d == N_x1 - 1)
-                    spacing = 0.5 * (delta_x1 + delta_x2);
+                    spacing = 0.5 * (params.delta_x1 + params.delta_x2);
                 else
-                    spacing = delta_x2;
+                    spacing = params.delta_x2;
                 target_depths[d + 1] = target_depths[d] + spacing;
             }
 
             std::vector<double> target_depths_mm(N_x1 + N_x2);
-            double dx1_mm = delta_x1 * 1000.0;
-            double dx2_mm = delta_x2 * 1000.0;
+            double dx1_mm = params.delta_x1 * 1000.0;
+            double dx2_mm = params.delta_x2 * 1000.0;
 
             target_depths_mm[0] = 0.0;
             for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
@@ -366,7 +340,7 @@ int main(int argc, char* argv[]) {
                 // Store in dE_dx (Depth-Major)
                 // dE_dx[depth_idx * count + particle_idx]
                 for (size_t d = 0; d < prof.size(); ++d) {
-                    dE_dx[d * count + j] = prof[d] * conv_factor2;  // Apply conv_factor2 here to match
+                    dE_dx[d * count + j] = prof[d] * PhysConst::eV_to_J;  // Apply conv_factor2 here to match
                                                                     // python passing `conv_factor2 * dE_dx`
                 }
             }
@@ -378,7 +352,7 @@ int main(int argc, char* argv[]) {
             std::vector<double> depths_m(target_depths_mm.size());
             for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
 
-            solver.solve(dE_dx, p_weights, p_coll_times, depths_m, local_params, out_T, out_times, out_Nx, out_Nt);
+            solver.solve(dE_dx, p_weights, p_coll_times, depths_m, params, coeff, out_T, out_times, out_Nx, out_Nt);
 
             double max_val = -1e20;
             int max_idx = -1;

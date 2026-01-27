@@ -264,7 +264,7 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
  * evaluated.
  */
 void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& weights, const std::vector<double>& coll_times,
-                   const std::vector<double>& depths, const SimulationParams& params, std::vector<double>& out_T, std::vector<double>& out_times,
+                   const std::vector<double>& depths, const SimulationParams& params, double coeff, std::vector<double>& out_T, std::vector<double>& out_times,
                    int& out_Nx, int& out_Nt) {
     double dt_small = params.dt_small;
     double dt_large = params.dt_large;
@@ -326,7 +326,7 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& 
             active_mask[j] = (coll_times[j] <= t_now) && (t_now <= (coll_times[j] + params.t_dep));
         }
 
-        compute_source(dE_dx, weights, active_mask, params.coeff, N_x, N_p, src);
+        compute_source(dE_dx, weights, active_mask, coeff, N_x, N_p, src);
 
         implicit_step(T, src, dt, h_face, dx_cell);
         // Store

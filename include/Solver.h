@@ -2,6 +2,9 @@
 #define INCLUDE_SOLVER_H_
 
 #include <vector>
+#include <assert.h>
+#include <fstream>
+#include <iostream>
 
 #include "ConfigParser.h"
 #include "Material.h"
@@ -14,7 +17,10 @@ struct SimulationParams {
     double t_end;
     double t_dep;  // Deposition duration
     double T_ini;  // Initial temperature
-    double coeff;  // Source term coefficient
+    double L;
+    double L_sub;
+    double delta_x1;
+    double delta_x2;
 
     void load(const ConfigParser& config) {
         dt_small = config.getDouble("dt_small", dt_small);
@@ -24,8 +30,26 @@ struct SimulationParams {
         t_end = config.getDouble("t_end", t_end);
         t_dep = config.getDouble("t_dep", t_dep);
         T_ini = config.getDouble("T_ini", T_ini);
-        // coeff is usually calculated at runtime based on area, so maybe don't load it or allow override
-        // coeff = config.getDouble("coeff", coeff);
+        L = config.getDouble("L", L);
+        L_sub = config.getDouble("L_sub", L_sub);
+        delta_x1 = config.getDouble("delta_x1", delta_x1);
+        delta_x2 = config.getDouble("delta_x2", delta_x2);
+        assert(t_dep < dt_small && "t_dep must be less than dt_small");
+    }
+
+    SimulationParams(std::string configPath) {
+        // --- Load Config ---
+        ConfigParser config;
+        // Check if config file exists before loading, or let it throw
+        std::ifstream f(configPath.c_str());
+        if (f.good()) {
+            config.load(configPath);
+            std::cout << "Loaded configuration from " << configPath << "\n";
+        } else {
+            std::cout << "Config file " << configPath << " not found, using defaults.\n";
+        }
+        
+        this->load(config);
     }
 };
 
@@ -35,6 +59,7 @@ class Solver {
 
     void solve(const std::vector<double>& dE_dx, const std::vector<double>& weights,
                const std::vector<double>& coll_times, const std::vector<double>& depths, const SimulationParams& params,
+               double coeff,
                std::vector<double>& out_T,      // NOLINT(runtime/references)
                std::vector<double>& out_times,  // NOLINT(runtime/references)
                int& out_Nx,                     // NOLINT(runtime/references)
