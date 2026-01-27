@@ -12,13 +12,18 @@
  * Constructor.
  */
 Interpolator::Interpolator(const std::string& h5Path) {
-    H5::H5File file(h5Path, H5F_ACC_RDONLY);
+    hid_t file_id = H5Fopen(h5Path.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (file_id < 0) {
+        throw std::runtime_error("Failed to open interpolation file: " + h5Path);
+    }
     
-    energies_train = Utils::readH5DoubleDataset(file, "energies");
-    angles_train = Utils::readH5DoubleDataset(file, "angles");
-    depths_std = Utils::readH5DoubleDataset(file, "depths");
+    energies_train = Utils::readH5DoubleDataset(file_id, "energies");
+    angles_train = Utils::readH5DoubleDataset(file_id, "angles");
+    depths_std = Utils::readH5DoubleDataset(file_id, "depths");
     
-    profiles_data = Utils::readH5DoubleDataset(file, "profiles");
+    profiles_data = Utils::readH5DoubleDataset(file_id, "profiles");
+    
+    H5Fclose(file_id);
     
     n_energies = energies_train.size();
     n_angles = angles_train.size();

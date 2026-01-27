@@ -39,7 +39,7 @@ double Material::getRho(double T) const {
     const double Tm = 3695.0;
     double dT = T - T0;
 
-    if (T0 <= T <= Tm) {
+    if (T0 <= T && T <= Tm) {
         return conv * (19.25 - (2.66207e-4) * dT - (3.0595e-9) * (dT * dT) - (9.5185e-12) * std::pow(dT, 3));
     } else {
         double dTm = T - Tm;

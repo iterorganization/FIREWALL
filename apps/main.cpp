@@ -6,7 +6,7 @@
 #include <numeric>
 #include <algorithm>
 #include <cmath>
-#include <H5Cpp.h>
+#include <hdf5.h>
 #include <omp.h>
 
 struct Particle {
@@ -40,17 +40,29 @@ int main() {
         std::cout << "Loading data..." << std::endl;
         
         // Wall
-        H5::H5File wallFile(wallPath, H5F_ACC_RDONLY);
+        hid_t wallFile = H5Fopen(wallPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (wallFile < 0) throw std::runtime_error("Failed to open wall file: " + wallPath);
+        
         std::vector<double> wall = Utils::readH5DoubleDataset(wallFile, "nodes");
+        H5Fclose(wallFile);
         
         // Particles
-        H5::H5File partFile(partPath, H5F_ACC_RDONLY);
-        H5::Group partGroup = partFile.openGroup("groups/001");
+        hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
+        
+        hid_t partGroup = H5Gopen2(partFile, "groups/001", H5P_DEFAULT);
+        if (partGroup < 0) {
+             H5Fclose(partFile);
+             throw std::runtime_error("Failed to open group 'groups/001' in " + partPath);
+        }
         
         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
         std::vector<double> t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
         std::vector<double> weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
         std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v"); // Nx3 flattened
+        
+        H5Gclose(partGroup);
+        H5Fclose(partFile);
         
         size_t n_particles = i_elm.size();
         std::vector<Particle> particles(n_particles);
@@ -315,7 +327,8 @@ int main() {
         
         // --- Write Results ---
         std::cout << "Writing results to " << outPath << "..." << std::endl;
-        H5::H5File resFile(outPath, H5F_ACC_TRUNC);
+        hid_t resFile = H5Fcreate(outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        if (resFile < 0) throw std::runtime_error("Failed to create result file: " + outPath);
         
         std::vector<double> wall_ids_out(N_select);
         std::vector<double> surf_temps_out(N_select);
@@ -332,24 +345,29 @@ int main() {
         
         // Write datasets
         hsize_t dims1[1] = { (hsize_t)N_select };
-        H5::DataSpace space1(1, dims1);
+        hid_t space1 = H5Screate_simple(1, dims1, NULL);
         
-        H5::DataSet ds1 = resFile.createDataSet("wall_ids", H5::PredType::NATIVE_DOUBLE, space1);
-        ds1.write(wall_ids_out.data(), H5::PredType::NATIVE_DOUBLE);
+        hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
+        H5Dclose(ds1);
         
-        H5::DataSet ds2 = resFile.createDataSet("surf_temp", H5::PredType::NATIVE_DOUBLE, space1);
-        ds2.write(surf_temps_out.data(), H5::PredType::NATIVE_DOUBLE);
+        hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(ds2, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, surf_temps_out.data());
+        H5Dclose(ds2);
+        
+        H5Sclose(space1);
         
         hsize_t dims2[2] = { (hsize_t)N_select, 50 };
-        H5::DataSpace space2(2, dims2);
-        H5::DataSet ds3 = resFile.createDataSet("temp_snaps", H5::PredType::NATIVE_DOUBLE, space2);
-        ds3.write(temp_snaps_out.data(), H5::PredType::NATIVE_DOUBLE);
+        hid_t space2 = H5Screate_simple(2, dims2, NULL);
+        hid_t ds3 = H5Dcreate2(resFile, "temp_snaps", H5T_NATIVE_DOUBLE, space2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_snaps_out.data());
+        H5Dclose(ds3);
+        H5Sclose(space2);
+        
+        H5Fclose(resFile);
         
         std::cout << "Done." << std::endl;
         
-    } catch (H5::Exception& e) {
-        std::cerr << "HDF5 Error: " << e.getDetailMsg() << std::endl;
-        return 1;
     } catch (std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;

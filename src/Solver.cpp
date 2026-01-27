@@ -350,7 +350,6 @@ void Solver::solve(
         compute_source(dE_dx, weights, active_mask, params.coeff, N_x, N_p, src);
         
         implicit_step(T, src, dt, h_face, dx_cell); 
-        print_bool = false;
         // Store
         for(int i=0; i<N_x; ++i) out_T[i * N_t + n] = T[i];
         out_times[n] = t_now;

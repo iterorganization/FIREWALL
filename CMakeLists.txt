@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(HDF5 REQUIRED COMPONENTS C CXX)
+find_package(HDF5 REQUIRED COMPONENTS C)
 find_package(OpenMP)
 
 if(OpenMP_CXX_FOUND)
@@ -17,7 +17,7 @@ include_directories(include)
 include_directories(${HDF5_INCLUDE_DIRS})
 
 add_executable(heat_sim
-    src/main.cpp
+    apps/main.cpp
     src/Interpolator.cpp
     src/Solver.cpp
     src/Material.cpp
