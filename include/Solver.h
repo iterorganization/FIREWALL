@@ -3,6 +3,7 @@
 
 #include <vector>
 
+#include "ConfigParser.h"
 #include "Material.h"
 
 struct SimulationParams {
@@ -14,6 +15,18 @@ struct SimulationParams {
     double t_dep;  // Deposition duration
     double T_ini;  // Initial temperature
     double coeff;  // Source term coefficient
+
+    void load(const ConfigParser& config) {
+        dt_small = config.getDouble("dt_small", dt_small);
+        dt_large = config.getDouble("dt_large", dt_large);
+        t_start = config.getDouble("t_start", t_start);
+        t_interm = config.getDouble("t_interm", t_interm);
+        t_end = config.getDouble("t_end", t_end);
+        t_dep = config.getDouble("t_dep", t_dep);
+        T_ini = config.getDouble("T_ini", T_ini);
+        // coeff is usually calculated at runtime based on area, so maybe don't load it or allow override
+        // coeff = config.getDouble("coeff", coeff);
+    }
 };
 
 class Solver {

@@ -5,11 +5,20 @@
 #include <cmath>
 #include <iostream>
 #include <numeric>
+#include <string>
 #include <vector>
 
+#include "ConfigParser.h"
 #include "Interpolator.h"
 #include "Solver.h"
 #include "Utils.h"
+
+// Default paths
+constexpr char DEFAULT_CONFIG[] = "./examples/config.txt";
+constexpr char DEFAULT_WALL[] = "./data/wall.h5";
+constexpr char DEFAULT_PART[] = "./data/particles.h5";
+constexpr char DEFAULT_INTERP[] = "./data/interpolation.h5";
+constexpr char DEFAULT_OUT[] = "results.h5";
 
 struct Particle {
     int id;
@@ -27,14 +36,91 @@ struct Result {
     std::vector<double> snaps;
 };
 
-int main() {
+void printUsage(const char* progName) {
+    std::cout << "Usage: " << progName << " [options]\n"
+              << "Options:\n"
+              << "  --config <path>    Path to configuration file (default: " << DEFAULT_CONFIG << ")\n"
+              << "  --wall <path>      Path to wall HDF5 file (default: " << DEFAULT_WALL << ")\n"
+              << "  --part <path>      Path to particles HDF5 file (default: " << DEFAULT_PART << ")\n"
+              << "  --interp <path>    Path to interpolation data HDF5 file (default: " << DEFAULT_INTERP << ")\n"
+              << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
+              << "  --help, -h         Show this help message\n";
+}
+
+int main(int argc, char* argv[]) {
     try {
-        // --- Paths ---
-        std::string wallPath = "../../data/hannes_data/newiterwall_offset10cm.h5";
-        // std::string wallPath = "asdex_wall.h5";
-        std::string partPath = "../../data/hannes_data/eta_10x_fo_v2/part_out_eta_10x_fo.h5";
-        std::string interpPath = "../../data/interpolation_data.h5";
-        std::string outPath = "iter_results.h5";
+        // --- Defaults ---
+        std::string configPath = DEFAULT_CONFIG;
+        std::string wallPath = DEFAULT_WALL;
+        std::string partPath = DEFAULT_PART;
+        std::string interpPath = DEFAULT_INTERP;
+        std::string outPath = DEFAULT_OUT;
+
+        // --- Argument Parsing ---
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            if (arg == "--config") {
+                if (i + 1 < argc) {
+                    configPath = argv[++i];
+                } else {
+                    std::cerr << "Error: --config requires a path argument.\n";
+                    return 1;
+                }
+            } else if (arg == "--wall") {
+                if (i + 1 < argc) {
+                    wallPath = argv[++i];
+                } else {
+                    std::cerr << "Error: --wall requires a path argument.\n";
+                    return 1;
+                }
+            } else if (arg == "--part") {
+                if (i + 1 < argc) {
+                    partPath = argv[++i];
+                } else {
+                    std::cerr << "Error: --part requires a path argument.\n";
+                    return 1;
+                }
+            } else if (arg == "--interp") {
+                if (i + 1 < argc) {
+                    interpPath = argv[++i];
+                } else {
+                    std::cerr << "Error: --interp requires a path argument.\n";
+                    return 1;
+                }
+            } else if (arg == "--out") {
+                if (i + 1 < argc) {
+                    outPath = argv[++i];
+                } else {
+                    std::cerr << "Error: --out requires a path argument.\n";
+                    return 1;
+                }
+            } else if (arg == "--help" || arg == "-h") {
+                printUsage(argv[0]);
+                return 0;
+            } else {
+                std::cerr << "Unknown argument: " << arg << "\n";
+                printUsage(argv[0]);
+                return 1;
+            }
+        }
+
+        std::cout << "Configuration:\n"
+                  << "  Config File: " << configPath << "\n"
+                  << "  Wall File:   " << wallPath << "\n"
+                  << "  Part File:   " << partPath << "\n"
+                  << "  Interp File: " << interpPath << "\n"
+                  << "  Output File: " << outPath << "\n";
+
+        // --- Load Config ---
+        ConfigParser config;
+        // Check if config file exists before loading, or let it throw
+        std::ifstream f(configPath.c_str());
+        if (f.good()) {
+            config.load(configPath);
+            std::cout << "Loaded configuration from " << configPath << "\n";
+        } else {
+            std::cout << "Config file " << configPath << " not found, using defaults.\n";
+        }
 
         // --- Load Data ---
         std::cout << "Loading data..." << std::endl;
@@ -126,6 +212,7 @@ int main() {
         int N_x2 = static_cast<int>(L_2 / delta_x2);
 
         SimulationParams params;
+        // Default values
         params.T_ini = 300;
         params.dt_small = 1e-7;
         params.dt_large = 1e-3;
@@ -133,6 +220,9 @@ int main() {
         params.t_start = 0.05125;
         params.t_end = 0.0514;
         params.t_interm = 0;
+
+        // Load from config (overrides defaults if key exists)
+        params.load(config);
 
         // --- Prepare Interpolator and Material ---
         Interpolator interpolator(interpPath);
@@ -182,7 +272,7 @@ int main() {
             int offset = wid * 9;
 
             if (offset + 8 >= wall.size()) {
-                std::cerr << "Error: Wall ID " << wid << " out of bounds! Wall size: " << wall.size() << std::endl;
+                std::cerr << "Error: Wall ID " << wid << " out of bounds! Wall size: " << wall.size() << "\n";
                 continue;
             }
 
