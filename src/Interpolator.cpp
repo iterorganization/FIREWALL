@@ -89,8 +89,7 @@ std::vector<double> Interpolator::interpolateProfile2D(double energy, double ang
         double p10 = profiles_data[offset_10 + i];
         double p11 = profiles_data[offset_11 + i];
 
-        double val = (1.0 - w_e) * (1.0 - w_a) * p00 + (1.0 - w_e) * w_a * p01 +
-                     w_e * (1.0 - w_a) * p10 + w_e * w_a * p11;
+        double val = (1.0 - w_e) * (1.0 - w_a) * p00 + (1.0 - w_e) * w_a * p01 + w_e * (1.0 - w_a) * p10 + w_e * w_a * p11;
         result[i] = val;
     }
 
@@ -98,14 +97,14 @@ std::vector<double> Interpolator::interpolateProfile2D(double energy, double ang
 }
 
 /**
- * 1D interpolation of the computed energy deposition profile onto a different grid.
+ * 1D interpolation of the computed energy deposition profile onto a different
+ * grid.
  *
  * x:  Grid onto which the profile is interpolated.
  * y:  Profile to interpolate.
  * xi: Grid point at which interpolation is done.
  */
-double Interpolator::interpolate1D(const std::vector<double>& x, const std::vector<double>& y,
-                                   double xi) {
+double Interpolator::interpolate1D(const std::vector<double>& x, const std::vector<double>& y, double xi) {
     // x is sorted increasing (depths)
 
     if (xi <= x.front()) return y.front();
@@ -132,8 +131,7 @@ double Interpolator::interpolate1D(const std::vector<double>& x, const std::vect
  * angle:   Incidence angle of macroparticle.
  * targetDepths: Grid onto which the profile is interpolated.
  */
-std::vector<double> Interpolator::getProfile(double energy, double angle,
-                                             const std::vector<double>& targetDepths) {
+std::vector<double> Interpolator::getProfile(double energy, double angle, const std::vector<double>& targetDepths) {
     // 1. Interpolate in E, A
     std::vector<double> prof_std = interpolateProfile2D(energy, angle);
 

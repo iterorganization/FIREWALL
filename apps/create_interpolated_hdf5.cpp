@@ -1,23 +1,26 @@
+#include <hdf5.h>
+
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "H5Cpp.h"
 #include "Interpolator.h"
 #include "Utils.h"
 
 // Helper function to create/write datasets since Utils mainly handles reading
-void writeDoubleDataset(H5::H5File& file, const std::string& name, const std::vector<double>& data,
-                        int rank, const hsize_t* dims) {
-    H5::DataSpace dataspace(rank, dims);
-    H5::DataSet dataset = file.createDataSet(name, H5::PredType::NATIVE_DOUBLE, dataspace);
-    dataset.write(data.data(), H5::PredType::NATIVE_DOUBLE);
+void writeDoubleDataset(hid_t file, const std::string& name, const std::vector<double>& data, int rank, const hsize_t* dims) {
+    hid_t space = H5Screate_simple(rank, dims, NULL);
+    hid_t dataset = H5Dcreate2(file, name.c_str(), H5T_NATIVE_DOUBLE, space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
+    H5Dclose(dataset);
+    H5Sclose(space);
 }
 
 int main() {
     try {
         // 1. Initialize Interpolator
-        // Assumes "training_data.h5" exists and contains 'energies', 'angles', 'depths', 'profiles'
+        // Assumes "training_data.h5" exists and contains 'energies', 'angles',
+        // 'depths', 'profiles'
         std::string inputPath = "../../data/interpolation_data.h5";
         Interpolator interp(inputPath);
 
@@ -51,7 +54,10 @@ int main() {
         }
 
         // 4. Write to HDF5
-        H5::H5File outFile("interpolated_output.h5", H5F_ACC_TRUNC);
+        hid_t outFile = H5Fcreate("interpolated_output.h5", H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        if (outFile < 0) {
+            throw std::runtime_error("Failed to create output file");
+        }
 
         // Write Axes
         hsize_t dimE[1] = {nE};
@@ -67,11 +73,9 @@ int main() {
         hsize_t dim3D[3] = {nE, nA, nD};
         writeDoubleDataset(outFile, "profiles", flat_results, 3, dim3D);
 
-        std::cout << "Success! Created 'interpolated_output.h5'" << std::endl;
+        H5Fclose(outFile);
 
-    } catch (const H5::Exception& error) {
-        error.printErrorStack();
-        return -1;
+        std::cout << "Success! Created 'interpolated_output.h5'" << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Standard Error: " << e.what() << std::endl;
         return -1;

@@ -1,5 +1,5 @@
-#ifndef MATERIAL_H
-#define MATERIAL_H
+#ifndef INCLUDE_MATERIAL_H_
+#define INCLUDE_MATERIAL_H_
 
 #include <string>
 #include <vector>
@@ -15,8 +15,11 @@ class Material {
     double getCp(double T) const;
 
     // Helper to get all properties for a vector of temperatures
-    void getProperties(const std::vector<double>& T, std::vector<double>& k,
-                       std::vector<double>& rho, std::vector<double>& cp) const;
+    void getProperties(const std::vector<double>& T,
+                       std::vector<double>& k,    // NOLINT(runtime/references)
+                       std::vector<double>& rho,  // NOLINT(runtime/references)
+                       std::vector<double>& cp)   // NOLINT(runtime/references)
+        const;
 };
 
-#endif
+#endif  // INCLUDE_MATERIAL_H_

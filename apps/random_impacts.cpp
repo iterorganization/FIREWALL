@@ -1,4 +1,4 @@
-#include <H5Cpp.h>
+#include <hdf5.h>
 
 #include <algorithm>
 #include <cmath>
@@ -25,8 +25,15 @@ int main(int argc, char* argv[]) {
         std::cout << "Loading data..." << std::endl;
 
         // Particles
-        H5::H5File partFile(partPath, H5F_ACC_RDONLY);
-        H5::Group partGroup = partFile.openGroup("groups/001");
+        hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+        if (partFile < 0) {
+            throw std::runtime_error("Failed to open particles file");
+        }
+        hid_t partGroup = H5Gopen2(partFile, "groups/001", H5P_DEFAULT);
+        if (partGroup < 0) {
+            H5Fclose(partFile);
+            throw std::runtime_error("Failed to open group");
+        }
 
         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
         std::vector<double> t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
@@ -35,6 +42,9 @@ int main(int argc, char* argv[]) {
         double energy = energy_vec[0];
         std::vector<double> angle_vec = Utils::readH5DoubleDatasetGroup(partGroup, "angle");
         double angle = angle_vec[0];
+
+        H5Gclose(partGroup);
+        H5Fclose(partFile);
 
         size_t n_particles = i_elm.size();
         std::vector<Particle> particles(n_particles);
@@ -59,20 +69,16 @@ int main(int argc, char* argv[]) {
         double L_1 = L / 30.0;
         double L_2 = L - L_1;
 
-        // double delta_x1 = 1.5e-7;
-        // double delta_x2 = 1.5e-4; //1.5e-4
-
         double delta_x1 = 2e-6;
         double delta_x2 = 2e-6;  // 1.5e-4
 
-        int N_x1 = (int)(L_1 / delta_x1);
-        int N_x2 = (int)(L_2 / delta_x2);
+        int N_x1 = static_cast<int>(L_1 / delta_x1);
+        int N_x2 = static_cast<int>(L_2 / delta_x2);
 
         SimulationParams params;
         params.T_ini = 300;
         params.dt_small = 1e-7;
         params.dt_large = 1e-3;
-        // params.t_dep = 10 * params.dt_small;
         params.t_dep = 10 * params.dt_small;
         params.t_start = 0.0;
         params.t_end = 1e-4;  // 1e-3
@@ -131,8 +137,7 @@ int main(int argc, char* argv[]) {
 
         for (size_t j = 0; j < n_particles; ++j) {
             // Interpolate for this particle
-            std::vector<double> prof =
-                interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
+            std::vector<double> prof = interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
 
             // Store in dE_dx (Depth-Major)
             for (size_t d = 0; d < prof.size(); ++d) {
@@ -174,48 +179,47 @@ int main(int argc, char* argv[]) {
 
         std::vector<double> depths_m(target_depths_mm.size());
         for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
-        solver.solve(dE_dx, p_weights, p_coll_times, depths_m, params, out_T, out_times, out_Nx,
-                     out_Nt);
-        try {
-            std::string s = std::to_string(energy);
-            s.erase(s.find_last_not_of('0') + 1, std::string::npos);
-            if (s.back() == '.') s.pop_back();
+        solver.solve(dE_dx, p_weights, p_coll_times, depths_m, params, out_T, out_times, out_Nx, out_Nt);
 
-            std::string outPath = "simulation_results_random" + std::to_string(n_particles) + ".h5";
-            H5::H5File outFile(outPath, H5F_ACC_TRUNC);
+        std::string s = std::to_string(energy);
+        s.erase(s.find_last_not_of('0') + 1, std::string::npos);
+        if (s.back() == '.') s.pop_back();
 
-            // 1. Save 1D Arrays (Times and Depths)
-            hsize_t time_dims[1] = {(hsize_t)out_Nt};
-            H5::DataSpace time_space(1, time_dims);
-            H5::DataSet time_ds =
-                outFile.createDataSet("times", H5::PredType::NATIVE_DOUBLE, time_space);
-            time_ds.write(out_times.data(), H5::PredType::NATIVE_DOUBLE);
+        std::string outPath = "simulation_results_random" + std::to_string(n_particles) + ".h5";
 
-            hsize_t depth_dims[1] = {(hsize_t)out_Nx};
-            H5::DataSpace depth_space(1, depth_dims);
-            H5::DataSet depth_ds =
-                outFile.createDataSet("depths", H5::PredType::NATIVE_DOUBLE, depth_space);
-            depth_ds.write(depths_m.data(), H5::PredType::NATIVE_DOUBLE);
-
-            // 2. Save 2D Temperature Grid
-            hsize_t temp_dims[2] = {(hsize_t)out_Nx, (hsize_t)out_Nt};
-            H5::DataSpace temp_space(2, temp_dims);
-
-            H5::DataSet temp_ds =
-                outFile.createDataSet("temperature", H5::PredType::NATIVE_DOUBLE, temp_space);
-            temp_ds.write(out_T.data(), H5::PredType::NATIVE_DOUBLE);
-
-            std::cout << "Results successfully saved to " << outPath << " (Layout: Depth x Time)"
-                      << std::endl;
-
-        } catch (H5::Exception& e) {
-            std::cerr << "Error writing HDF5: " << e.getDetailMsg() << std::endl;
+        hid_t outFile = H5Fcreate(outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+        if (outFile < 0) {
+            throw std::runtime_error("Failed to create output file");
         }
 
-    } catch (H5::Exception& e) {
-        std::cerr << "HDF5 Error: " << e.getDetailMsg() << std::endl;
-        return 1;
-    } catch (std::exception& e) {
+        // 1. Save 1D Arrays (Times and Depths)
+        hsize_t time_dims[1] = {(hsize_t)out_Nt};
+        hid_t time_space = H5Screate_simple(1, time_dims, NULL);
+        hid_t time_ds = H5Dcreate2(outFile, "times", H5T_NATIVE_DOUBLE, time_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(time_ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_times.data());
+        H5Dclose(time_ds);
+        H5Sclose(time_space);
+
+        hsize_t depth_dims[1] = {(hsize_t)out_Nx};
+        hid_t depth_space = H5Screate_simple(1, depth_dims, NULL);
+        hid_t depth_ds = H5Dcreate2(outFile, "depths", H5T_NATIVE_DOUBLE, depth_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(depth_ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, depths_m.data());
+        H5Dclose(depth_ds);
+        H5Sclose(depth_space);
+
+        // 2. Save 2D Temperature Grid
+        hsize_t temp_dims[2] = {(hsize_t)out_Nx, (hsize_t)out_Nt};
+        hid_t temp_space = H5Screate_simple(2, temp_dims, NULL);
+
+        hid_t temp_ds = H5Dcreate2(outFile, "temperature", H5T_NATIVE_DOUBLE, temp_space, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        H5Dwrite(temp_ds, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_T.data());
+        H5Dclose(temp_ds);
+        H5Sclose(temp_space);
+
+        H5Fclose(outFile);
+
+        std::cout << "Results successfully saved to " << outPath << " (Layout: Depth x Time)" << std::endl;
+    } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
     }

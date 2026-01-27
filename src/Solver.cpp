@@ -22,8 +22,7 @@ Solver::Solver(const Material& material) : mat(material) {}
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<double>& h_face,
-                                   std::vector<double>& dx_cell) {
+void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<double>& h_face, std::vector<double>& dx_cell) {
     size_t N = x.size();
     if (N > 1) {
         h_face.resize(N - 1);
@@ -53,15 +52,15 @@ void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<dou
 /**
  * Assembles the source term.
  *
- * dE_dx:       Matrix containing the energy deposition profiles for each incident macroparticle.
- * weights:     Vector containing the weight (number of physical particles) for each incident
- * macroparticle. active_mask: Vector containing the time intervals over which a macroparticle
- * deposits energy. N_x:         Number of nodes in the in depth grid. N_p:         Number of
+ * dE_dx:       Matrix containing the energy deposition profiles for each
+ * incident macroparticle. weights:     Vector containing the weight (number of
+ * physical particles) for each incident macroparticle. active_mask: Vector
+ * containing the time intervals over which a macroparticle deposits energy.
+ * N_x:         Number of nodes in the in depth grid. N_p:         Number of
  * macroparticles. src:         Source term.
  */
-void Solver::compute_source(const std::vector<double>& dE_dx, const std::vector<double>& weights,
-                            const std::vector<bool>& active_mask, double coeff, int N_x, int N_p,
-                            std::vector<double>& src) {
+void Solver::compute_source(const std::vector<double>& dE_dx, const std::vector<double>& weights, const std::vector<bool>& active_mask, double coeff,
+                            int N_x, int N_p, std::vector<double>& src) {
     src.assign(N_x, 0.0);
 
 // Parallelize over spatial grid
@@ -93,12 +92,9 @@ void Solver::compute_source(const std::vector<double>& dE_dx, const std::vector<
  * c:            Vector containing the c_i values.
  * d:            Vector containing the d_i values.
  */
-void Solver::assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn,
-                              const std::vector<double>& rho_cp_nodes,
-                              const std::vector<double>& src, double dt,
-                              const std::vector<double>& h_face, const std::vector<double>& dx_cell,
-                              std::vector<double>& a, std::vector<double>& b,
-                              std::vector<double>& c, std::vector<double>& d) {
+void Solver::assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn, const std::vector<double>& rho_cp_nodes,
+                              const std::vector<double>& src, double dt, const std::vector<double>& h_face, const std::vector<double>& dx_cell,
+                              std::vector<double>& a, std::vector<double>& b, std::vector<double>& c, std::vector<double>& d) {
     size_t N = T_guess.size();
     a.assign(N, 0.0);
     b.assign(N, 0.0);
@@ -177,8 +173,7 @@ void Solver::assemble_tridiag(const std::vector<double>& T_guess, const std::vec
  * c: Vector containing the c_i values.
  * d: Vector containing the d_i values.
  */
-std::vector<double> Solver::thomas_solve(const std::vector<double>& a, const std::vector<double>& b,
-                                         const std::vector<double>& c,
+std::vector<double> Solver::thomas_solve(const std::vector<double>& a, const std::vector<double>& b, const std::vector<double>& c,
                                          const std::vector<double>& d) {
     size_t N = b.size();
     std::vector<double> cp(N);
@@ -216,8 +211,8 @@ std::vector<double> Solver::thomas_solve(const std::vector<double>& a, const std
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& src, double dt,
-                           const std::vector<double>& h_face, const std::vector<double>& dx_cell) {
+void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& src, double dt, const std::vector<double>& h_face,
+                           const std::vector<double>& dx_cell) {
     size_t N = Tn.size();
     std::vector<double> T_guess = Tn;  // Copy
     std::vector<double> T_new;
@@ -257,19 +252,20 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
 /**
  * Solve 1D nonlinear heat equation.
  *
- * dE_dx:      Matrix containing the energy deposition profiles for each incident macroparticle.
- * weights:    Vector containing the weight (number of physical particles) for each incident
- * macroparticle. coll_times: Vector containing the time of impact of each macroparticle. depths: In
- * depth grid on which the Temperature profile is evaluated. params:     Parameters used for the
- * simulation. out_T:      Matrix containing the temperature profile for every time step. out_times:
- * Vector containing the times at which the temperature profile is evaluated. out_Nx:     Number of
- * nodes in the in depth grid. out_Nt:     Number of time points at which the temperature profile is
+ * dE_dx:      Matrix containing the energy deposition profiles for each
+ * incident macroparticle. weights:    Vector containing the weight (number of
+ * physical particles) for each incident macroparticle. coll_times: Vector
+ * containing the time of impact of each macroparticle. depths: In depth grid on
+ * which the Temperature profile is evaluated. params:     Parameters used for
+ * the simulation. out_T:      Matrix containing the temperature profile for
+ * every time step. out_times: Vector containing the times at which the
+ * temperature profile is evaluated. out_Nx:     Number of nodes in the in depth
+ * grid. out_Nt:     Number of time points at which the temperature profile is
  * evaluated.
  */
-void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& weights,
-                   const std::vector<double>& coll_times, const std::vector<double>& depths,
-                   const SimulationParams& params, std::vector<double>& out_T,
-                   std::vector<double>& out_times, int& out_Nx, int& out_Nt) {
+void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& weights, const std::vector<double>& coll_times,
+                   const std::vector<double>& depths, const SimulationParams& params, std::vector<double>& out_T, std::vector<double>& out_times,
+                   int& out_Nx, int& out_Nt) {
     double dt_small = params.dt_small;
     double dt_large = params.dt_large;
     double t_start = params.t_start;
@@ -280,11 +276,11 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& 
     int N_t = 0;
 
     if (t_interm <= t_start || t_interm >= t_end || t_interm == 0.0) {
-        N_t = (int)(std::ceil((t_end - t_start) / dt)) + 1;
+        N_t = static_cast<int>(std::ceil((t_end - t_start) / dt)) + 1;
         t_interm = t_end + 1.0;
     } else {
-        int Nt1 = (int)(std::ceil((t_interm - t_start) / dt_small));
-        int Nt2 = (int)(std::ceil((t_end - t_interm) / dt_large));
+        int Nt1 = static_cast<int>(std::ceil((t_interm - t_start) / dt_small));
+        int Nt2 = static_cast<int>(std::ceil((t_end - t_interm) / dt_large));
         N_t = Nt1 + Nt2 + 1;
     }
 

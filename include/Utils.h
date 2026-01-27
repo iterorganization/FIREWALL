@@ -1,5 +1,5 @@
-#ifndef UTILS_H
-#define UTILS_H
+#ifndef INCLUDE_UTILS_H_
+#define INCLUDE_UTILS_H_
 
 #include <hdf5.h>
 
@@ -9,8 +9,8 @@
 namespace Utils {
 std::vector<double> readH5DoubleDataset(hid_t location_id, const std::string& datasetName);
 std::vector<int> readH5IntDataset(hid_t location_id, const std::string& datasetName);
-// Groups are also identified by hid_t in C API, so we can merge or keep aliases.
-// We'll keep the function names for compatibility but use hid_t.
+// Groups are also identified by hid_t in C API, so we can merge or keep
+// aliases. We'll keep the function names for compatibility but use hid_t.
 std::vector<double> readH5DoubleDatasetGroup(hid_t group_id, const std::string& datasetName);
 std::vector<int> readH5IntDatasetGroup(hid_t group_id, const std::string& datasetName);
 
@@ -25,4 +25,4 @@ struct CSVData {
 CSVData readCSV(const std::string& filename);
 }  // namespace Utils
 
-#endif
+#endif  // INCLUDE_UTILS_H_

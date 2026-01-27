@@ -29,8 +29,7 @@ std::vector<double> readH5DoubleDataset(hid_t location_id, const std::string& da
     }
 
     std::vector<double> data(total_size);
-    herr_t status =
-        H5Dread(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
+    herr_t status = H5Dread(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
 
     H5Sclose(dataspace_id);
     H5Dclose(dataset_id);
@@ -71,11 +70,7 @@ std::vector<int> readH5IntDataset(hid_t location_id, const std::string& datasetN
     return data;
 }
 
-std::vector<double> readH5DoubleDatasetGroup(hid_t group_id, const std::string& datasetName) {
-    return readH5DoubleDataset(group_id, datasetName);
-}
+std::vector<double> readH5DoubleDatasetGroup(hid_t group_id, const std::string& datasetName) { return readH5DoubleDataset(group_id, datasetName); }
 
-std::vector<int> readH5IntDatasetGroup(hid_t group_id, const std::string& datasetName) {
-    return readH5IntDataset(group_id, datasetName);
-}
+std::vector<int> readH5IntDatasetGroup(hid_t group_id, const std::string& datasetName) { return readH5IntDataset(group_id, datasetName); }
 }  // namespace Utils

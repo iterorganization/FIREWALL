@@ -59,8 +59,7 @@ int main() {
         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
         std::vector<double> t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
         std::vector<double> weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
-        std::vector<double> v_flat =
-            Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
+        std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
 
         H5Gclose(partGroup);
         H5Fclose(partFile);
@@ -69,8 +68,7 @@ int main() {
         std::vector<Particle> particles(n_particles);
 
         for (size_t i = 0; i < n_particles; ++i) {
-            particles[i].id =
-                -i_elm[i];  // Python code flips sign: wetted_sorted = -wetted_elements[sort_idx]
+            particles[i].id = -i_elm[i];  // Python code flips sign: wetted_sorted = -wetted_elements[sort_idx]
             particles[i].t_loss = t_loss[i];
             particles[i].weight = weight[i];
             particles[i].vx = v_flat[i * 3 + 0];
@@ -83,8 +81,7 @@ int main() {
         std::sort(particles.begin(), particles.end(), compareParticles);
 
         // Find first non-zero ID
-        auto it_first_nonzero = std::find_if(particles.begin(), particles.end(),
-                                             [](const Particle& p) { return p.id != 0; });
+        auto it_first_nonzero = std::find_if(particles.begin(), particles.end(), [](const Particle& p) { return p.id != 0; });
 
         if (it_first_nonzero == particles.end()) {
             std::cerr << "No non-zero particles found." << std::endl;
@@ -125,8 +122,8 @@ int main() {
         double delta_x1 = 1.5e-6;
         double delta_x2 = 1.5e-4;
 
-        int N_x1 = (int)(L_1 / delta_x1);
-        int N_x2 = (int)(L_2 / delta_x2);
+        int N_x1 = static_cast<int>(L_1 / delta_x1);
+        int N_x2 = static_cast<int>(L_2 / delta_x2);
 
         SimulationParams params;
         params.T_ini = 300;
@@ -155,14 +152,13 @@ int main() {
         // To avoid searching every time, we can pre-calculate ranges
         std::vector<std::pair<size_t, size_t>> ranges(N_select);
 
-        // filtered_particles is sorted descending. unique_ids is sorted descending.
-        // We can scan through.
+        // filtered_particles is sorted descending. unique_ids is sorted
+        // descending. We can scan through.
         size_t current_idx = 0;
         for (int i = 0; i < N_select; ++i) {
             int uid = selected_ids[i];
             size_t start = current_idx;
-            while (current_idx < filtered_particles.size() &&
-                   filtered_particles[current_idx].id == uid) {
+            while (current_idx < filtered_particles.size() && filtered_particles[current_idx].id == uid) {
                 current_idx++;
             }
             ranges[i] = {start, current_idx};
@@ -186,8 +182,7 @@ int main() {
             int offset = wid * 9;
 
             if (offset + 8 >= wall.size()) {
-                std::cerr << "Error: Wall ID " << wid
-                          << " out of bounds! Wall size: " << wall.size() << std::endl;
+                std::cerr << "Error: Wall ID " << wid << " out of bounds! Wall size: " << wall.size() << std::endl;
                 continue;
             }
 
@@ -204,8 +199,7 @@ int main() {
             normal[1] = a[2] * b[0] - a[0] * b[2];
             normal[2] = a[0] * b[1] - a[1] * b[0];
 
-            double norm_len =
-                std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
+            double norm_len = std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
             normal[0] /= norm_len;
             normal[1] /= norm_len;
             normal[2] /= norm_len;
@@ -276,15 +270,13 @@ int main() {
 
             for (size_t j = 0; j < count; ++j) {
                 // Interpolate for this particle
-                std::vector<double> prof =
-                    interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
+                std::vector<double> prof = interpolator.getProfile(p_energies[j], p_angles[j], target_depths_mm);
 
                 // Store in dE_dx (Depth-Major)
                 // dE_dx[depth_idx * count + particle_idx]
                 for (size_t d = 0; d < prof.size(); ++d) {
-                    dE_dx[d * count + j] =
-                        prof[d] * conv_factor2;  // Apply conv_factor2 here to match python passing
-                                                 // `conv_factor2 * dE_dx`
+                    dE_dx[d * count + j] = prof[d] * conv_factor2;  // Apply conv_factor2 here to match
+                                                                    // python passing `conv_factor2 * dE_dx`
                 }
             }
 
@@ -295,8 +287,7 @@ int main() {
             std::vector<double> depths_m(target_depths_mm.size());
             for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
 
-            solver.solve(dE_dx, p_weights, p_coll_times, depths_m, local_params, out_T, out_times,
-                         out_Nx, out_Nt);
+            solver.solve(dE_dx, p_weights, p_coll_times, depths_m, local_params, out_T, out_times, out_Nx, out_Nt);
 
             double max_val = -1e20;
             int max_idx = -1;
@@ -323,7 +314,7 @@ int main() {
             for (int s = 0; s < 50; ++s) {
                 // linspace logic
                 // 0 to Nt-1
-                int t_idx = (int)(s * (out_Nt - 1) / 49.0);  // simple linear map
+                int t_idx = static_cast<int>(s * (out_Nt - 1) / 49.0);  // simple linear map
                 if (t_idx >= out_Nt) t_idx = out_Nt - 1;
                 snaps[s] = out_T[t_idx];  // x=0, time=t_idx -> index=t_idx
             }
@@ -344,7 +335,7 @@ int main() {
         std::vector<double> temp_snaps_out(N_select * 50);
 
         for (int i = 0; i < N_select; ++i) {
-            wall_ids_out[i] = (double)results[i].wall_id;
+            wall_ids_out[i] = static_cast<double>(results[i].wall_id);
             surf_temps_out[i] = results[i].surf_temp;
             for (int s = 0; s < 50; ++s) {
                 temp_snaps_out[i * 50 + s] = results[i].snaps[s];
@@ -355,13 +346,11 @@ int main() {
         hsize_t dims1[1] = {(hsize_t)N_select};
         hid_t space1 = H5Screate_simple(1, dims1, NULL);
 
-        hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT,
-                               H5P_DEFAULT, H5P_DEFAULT);
+        hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
         H5Dclose(ds1);
 
-        hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT,
-                               H5P_DEFAULT, H5P_DEFAULT);
+        hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         H5Dwrite(ds2, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, surf_temps_out.data());
         H5Dclose(ds2);
 
@@ -369,8 +358,7 @@ int main() {
 
         hsize_t dims2[2] = {(hsize_t)N_select, 50};
         hid_t space2 = H5Screate_simple(2, dims2, NULL);
-        hid_t ds3 = H5Dcreate2(resFile, "temp_snaps", H5T_NATIVE_DOUBLE, space2, H5P_DEFAULT,
-                               H5P_DEFAULT, H5P_DEFAULT);
+        hid_t ds3 = H5Dcreate2(resFile, "temp_snaps", H5T_NATIVE_DOUBLE, space2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, temp_snaps_out.data());
         H5Dclose(ds3);
         H5Sclose(space2);
@@ -378,7 +366,6 @@ int main() {
         H5Fclose(resFile);
 
         std::cout << "Done." << std::endl;
-
     } catch (std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
