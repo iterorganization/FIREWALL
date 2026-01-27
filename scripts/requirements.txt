@@ -1,0 +1,2 @@
+scipy
+h5py

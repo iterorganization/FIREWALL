@@ -4,12 +4,10 @@ import h5py
 import os
 
 def convert_mat_to_h5():
-    mat_path = 'data/train_data/3deg7T.mat'
-    h5_path = 'data/interpolation_data.h5'
+    mat_path = '../build/data/3deg7T.mat'
+    h5_path = '../build/data/interpolation_data.h5'
 
     if not os.path.exists(mat_path):
-        # Fallback for the environment where the user might run this
-        mat_path = '../data/train_data/3deg7T.mat'
         if not os.path.exists(mat_path):
              print(f"Error: Could not find {mat_path}")
              return

@@ -7,6 +7,7 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <fstream>
 
 #include "ConfigParser.h"
 #include "Interpolator.h"
@@ -14,7 +15,7 @@
 #include "Utils.h"
 
 // Default paths
-constexpr char DEFAULT_CONFIG[] = "./examples/config.txt";
+constexpr char DEFAULT_CONFIG[] = "../examples/config.txt";
 constexpr char DEFAULT_WALL[] = "./data/wall.h5";
 constexpr char DEFAULT_PART[] = "./data/particles.h5";
 constexpr char DEFAULT_INTERP[] = "./data/interpolation.h5";
