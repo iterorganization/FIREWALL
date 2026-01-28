@@ -1,23 +1,23 @@
-cmake_minimum_required(VERSION 3.10)
-project(HeatSimulation LANGUAGES CXX)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Declare project
+project(HeatSimulation LANGUAGES CXX C)
+
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Find Dependencies
+# HDF5 often requires C language enabled to find the C component correctly
 find_package(HDF5 REQUIRED COMPONENTS C)
 find_package(OpenMP)
 
-if(OpenMP_CXX_FOUND)
-    message(STATUS "OpenMP found, enabling parallel execution.")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-endif()
-
-include_directories(include)
-include_directories(${HDF5_INCLUDE_DIRS})
-
-add_executable(heat_sim
-    src/main.cpp
+# -----------------------------------------------------------------------------
+# Core Library
+# (Compiles the logic once, shared by all executables)
+# -----------------------------------------------------------------------------
+add_library(core_lib STATIC
     src/Interpolator.cpp
     src/Solver.cpp
     src/Material.cpp
@@ -26,7 +26,39 @@ add_executable(heat_sim
     src/ArgParser.cpp
 )
 
-target_link_libraries(heat_sim PRIVATE ${HDF5_LIBRARIES})
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(heat_sim PRIVATE OpenMP::OpenMP_CXX)
+# Set C++ Standard specifically for this target
+target_compile_features(core_lib PUBLIC cxx_std_17)
+
+# Include directories
+# PUBLIC = accessible to core_lib AND anything that links to it
+target_include_directories(core_lib PUBLIC 
+    include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+# Link HDF5
+if(TARGET hdf5::hdf5)
+    target_link_libraries(core_lib PUBLIC hdf5::hdf5)
+else()
+    # Fallback for older HDF5 installations
+    target_include_directories(core_lib PUBLIC ${HDF5_INCLUDE_DIRS})
+    target_link_libraries(core_lib PUBLIC ${HDF5_LIBRARIES})
 endif()
+
+# Link OpenMP
+if(OpenMP_CXX_FOUND)
+    message(STATUS "OpenMP found, enabling parallel execution.")
+    target_link_libraries(core_lib PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# -----------------------------------------------------------------------------
+# Executables
+# -----------------------------------------------------------------------------
+
+# 1. Main Simulation Executable
+add_executable(heat_sim src/main.cpp)
+target_link_libraries(heat_sim PRIVATE core_lib)
+
+# 2. Benching Executable
+add_executable(benching tests/bench.cpp)
+target_link_libraries(benching PRIVATE core_lib)

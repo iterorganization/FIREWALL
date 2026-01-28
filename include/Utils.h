@@ -14,6 +14,10 @@ std::vector<int> readH5IntDataset(hid_t location_id, const std::string& datasetN
 std::vector<double> readH5DoubleDatasetGroup(hid_t group_id, const std::string& datasetName);
 std::vector<int> readH5IntDatasetGroup(hid_t group_id, const std::string& datasetName);
 
+double readH5DoubleScalar(hid_t location_id, const std::string& datasetName);
+
+size_t getNumParticles(const std::string& partPath);
+
 // Reads a CSV file with headers into a map of column name -> vector of doubles
 // Assumes all columns are numeric
 struct CSVData {
