@@ -60,6 +60,16 @@ int main(int argc, char* argv[]) {
                   << "  Part File:   " << partPath << "\n"
                   << "  Interp File: " << interpPath << "\n"
                   << "  Output File: " << outPath << "\n";
+        
+        if (args.wallIds.empty()) {
+            std::cout << "  Walls:       All\n";
+        } else {
+            std::cout << "  Walls:       ";
+            for (size_t i = 0; i < args.wallIds.size(); ++i) {
+                std::cout << args.wallIds[i] << (i < args.wallIds.size() - 1 ? ", " : "");
+            }
+            std::cout << "\n";
+        }
 
         // --- Load Data ---
         std::cout << "Loading data..." << std::endl;
@@ -146,9 +156,24 @@ int main(int argc, char* argv[]) {
         Material material;
         Solver solver(material);
 
-        int N_select = unique_ids.size();
+        std::vector<int> selected_ids;
+        if (args.wallIds.empty()) {
+            selected_ids = unique_ids;
+        } else {
+            for (int uid : unique_ids) {
+                for (int req_id : args.wallIds) {
+                    if (req_id == uid) {
+                        selected_ids.push_back(uid);
+                        break;
+                    }
+                }
+            }
+             if (selected_ids.empty()) {
+                std::cerr << "Warning: None of the requested wall IDs were found in the particle data." << std::endl;
+            }
+        }
 
-        std::vector<int> selected_ids(unique_ids.begin(), unique_ids.begin() + N_select);
+        int N_select = selected_ids.size();
 
         std::cout << "Processing " << N_select << " elements using OpenMP..." << std::endl;
         std::cout << "Max threads: " << omp_get_max_threads() << std::endl;

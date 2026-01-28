@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <sstream>
 
 // Default paths
 constexpr char DEFAULT_CONFIG[] = "../examples/config.txt";
@@ -18,6 +19,7 @@ void ArgParser::printUsage(const char* progName) {
               << "  --part <path>      Path to particles HDF5 file (default: " << DEFAULT_PART << ")\n"
               << "  --interp <path>    Path to interpolation data HDF5 file (default: " << DEFAULT_INTERP << ")\n"
               << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
+              << "  --walls <list>     Comma-separated list of wall IDs to process (default: all)\n"
               << "  --help, -h         Show this help message\n";
 }
 
@@ -61,6 +63,23 @@ ArgParser::Args ArgParser::parse(int argc, char* argv[]) {
                 args.outPath = argv[++i];
             } else {
                 throw std::runtime_error("Error: --out requires a path argument.");
+            }
+        } else if (arg == "--walls") {
+            if (i + 1 < argc) {
+                std::string val = argv[++i];
+                std::stringstream ss(val);
+                std::string segment;
+                while (std::getline(ss, segment, ',')) {
+                    if (!segment.empty()) {
+                        try {
+                            args.wallIds.push_back(std::stoi(segment));
+                        } catch (...) {
+                            throw std::runtime_error("Error: Invalid wall ID in list: " + segment);
+                        }
+                    }
+                }
+            } else {
+                throw std::runtime_error("Error: --walls requires a comma-separated list of IDs.");
             }
         } else if (arg == "--help" || arg == "-h") {
             args.help = true;

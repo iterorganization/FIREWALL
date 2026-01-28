@@ -17,7 +17,7 @@ include_directories(include)
 include_directories(${HDF5_INCLUDE_DIRS})
 
 add_executable(heat_sim
-    apps/main.cpp
+    src/main.cpp
     src/Interpolator.cpp
     src/Solver.cpp
     src/Material.cpp

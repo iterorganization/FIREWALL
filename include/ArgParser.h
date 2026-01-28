@@ -2,6 +2,7 @@
 #define ARG_PARSER_H
 
 #include <string>
+#include <vector>
 
 class ArgParser {
 public:
@@ -11,6 +12,7 @@ public:
         std::string partPath;
         std::string interpPath;
         std::string outPath;
+        std::vector<int> wallIds;
         bool help = false;
     };
 
