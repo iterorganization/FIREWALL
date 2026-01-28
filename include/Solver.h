@@ -34,7 +34,7 @@ struct SimulationParams {
         L_sub = config.getDouble("L_sub", L_sub);
         delta_x1 = config.getDouble("delta_x1", delta_x1);
         delta_x2 = config.getDouble("delta_x2", delta_x2);
-        assert(t_dep < dt_small && "t_dep must be less than dt_small");
+        assert(t_dep > dt_small && "t_dep must be less than dt_small");
     }
 
     SimulationParams(std::string configPath) {
