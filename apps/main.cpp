@@ -13,13 +13,7 @@
 #include "Interpolator.h"
 #include "Solver.h"
 #include "Utils.h"
-
-// Default paths
-constexpr char DEFAULT_CONFIG[] = "../examples/config.txt";
-constexpr char DEFAULT_WALL[] = "./data/wall.h5";
-constexpr char DEFAULT_PART[] = "./data/particles.h5";
-constexpr char DEFAULT_INTERP[] = "./data/interpolation.h5";
-constexpr char DEFAULT_OUT[] = "results.h5";
+#include "ArgParser.h"
 
 struct Particle {
     int id;
@@ -46,73 +40,19 @@ namespace PhysConst {
     constexpr double eV_to_J = e * 1e9;                 // eV to Joules
 }
 
-void printUsage(const char* progName) {
-    std::cout << "Usage: " << progName << " [options]\n"
-              << "Options:\n"
-              << "  --config <path>    Path to configuration file (default: " << DEFAULT_CONFIG << ")\n"
-              << "  --wall <path>      Path to wall HDF5 file (default: " << DEFAULT_WALL << ")\n"
-              << "  --part <path>      Path to particles HDF5 file (default: " << DEFAULT_PART << ")\n"
-              << "  --interp <path>    Path to interpolation data HDF5 file (default: " << DEFAULT_INTERP << ")\n"
-              << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
-              << "  --help, -h         Show this help message\n";
-}
-
 int main(int argc, char* argv[]) {
     try {
-        // --- Defaults ---
-        std::string configPath = DEFAULT_CONFIG;
-        std::string wallPath = DEFAULT_WALL;
-        std::string partPath = DEFAULT_PART;
-        std::string interpPath = DEFAULT_INTERP;
-        std::string outPath = DEFAULT_OUT;
-
-        // --- Argument Parsing ---
-        for (int i = 1; i < argc; ++i) {
-            std::string arg = argv[i];
-            if (arg == "--config") {
-                if (i + 1 < argc) {
-                    configPath = argv[++i];
-                } else {
-                    std::cerr << "Error: --config requires a path argument.\n";
-                    return 1;
-                }
-            } else if (arg == "--wall") {
-                if (i + 1 < argc) {
-                    wallPath = argv[++i];
-                } else {
-                    std::cerr << "Error: --wall requires a path argument.\n";
-                    return 1;
-                }
-            } else if (arg == "--part") {
-                if (i + 1 < argc) {
-                    partPath = argv[++i];
-                } else {
-                    std::cerr << "Error: --part requires a path argument.\n";
-                    return 1;
-                }
-            } else if (arg == "--interp") {
-                if (i + 1 < argc) {
-                    interpPath = argv[++i];
-                } else {
-                    std::cerr << "Error: --interp requires a path argument.\n";
-                    return 1;
-                }
-            } else if (arg == "--out") {
-                if (i + 1 < argc) {
-                    outPath = argv[++i];
-                } else {
-                    std::cerr << "Error: --out requires a path argument.\n";
-                    return 1;
-                }
-            } else if (arg == "--help" || arg == "-h") {
-                printUsage(argv[0]);
-                return 0;
-            } else {
-                std::cerr << "Unknown argument: " << arg << "\n";
-                printUsage(argv[0]);
-                return 1;
-            }
+        ArgParser::Args args = ArgParser::parse(argc, argv);
+        if (args.help) {
+            ArgParser::printUsage(argv[0]);
+            return 0;
         }
+
+        std::string configPath = args.configPath;
+        std::string wallPath = args.wallPath;
+        std::string partPath = args.partPath;
+        std::string interpPath = args.interpPath;
+        std::string outPath = args.outPath;
 
         std::cout << "Configuration:\n"
                   << "  Config File: " << configPath << "\n"

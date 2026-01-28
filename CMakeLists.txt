@@ -23,6 +23,7 @@ add_executable(heat_sim
     src/Material.cpp
     src/Utils.cpp
     src/ConfigParser.cpp
+    src/ArgParser.cpp
 )
 
 target_link_libraries(heat_sim PRIVATE ${HDF5_LIBRARIES})
