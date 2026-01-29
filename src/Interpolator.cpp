@@ -40,7 +40,7 @@ Interpolator::Interpolator(const std::string& h5Path) {
  * energy:   Energy of physical particle in a macroparticle.
  * angle:    Incidence angle of macroparticle.
  */
-std::vector<double> Interpolator::interpolateProfile2D(double energy, double angle) {
+std::vector<double> Interpolator::interpolateProfile2D(double energy, double angle) const {
     // Clamp
     if (energy < energies_train.front()) energy = energies_train.front();
     if (energy > energies_train.back()) energy = energies_train.back();
@@ -105,7 +105,7 @@ std::vector<double> Interpolator::interpolateProfile2D(double energy, double ang
  * y:  Profile to interpolate.
  * xi: Grid point at which interpolation is done.
  */
-double Interpolator::interpolate1D(const std::vector<double>& x, const std::vector<double>& y, double xi) {
+double Interpolator::interpolate1D(const std::vector<double>& x, const std::vector<double>& y, double xi) const {
     // x is sorted increasing (depths)
 
     if (xi <= x.front()) return y.front();
@@ -124,7 +124,7 @@ double Interpolator::interpolate1D(const std::vector<double>& x, const std::vect
     return y0 + t * (y1 - y0);
 }
 
-std::vector<double> Interpolator::getSplineDerivatives(const std::vector<double>& x, const std::vector<double>& y, InterpolationType type) {
+std::vector<double> Interpolator::getSplineDerivatives(const std::vector<double>& x, const std::vector<double>& y, InterpolationType type) const {
     size_t n = x.size();
     if (n < 5) {
         // Fallback to zeros or simple slope if too small, but here we assume n is large
@@ -199,7 +199,7 @@ std::vector<double> Interpolator::getSplineDerivatives(const std::vector<double>
     return derivs;
 }
 
-double Interpolator::interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1) {
+double Interpolator::interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1) const {
     double h = x1 - x0;
     if (std::abs(h) < 1e-12) return y0;
 
@@ -223,7 +223,7 @@ double Interpolator::interpolateHermite(double xi, double x0, double x1, double 
  * angle:   Incidence angle of macroparticle.
  * targetDepths: Grid onto which the profile is interpolated.
  */
-std::vector<double> Interpolator::getProfile(double energy, double angle, const std::vector<double>& targetDepths) {
+std::vector<double> Interpolator::getProfile(double energy, double angle, const std::vector<double>& targetDepths) const {
     // 1. Interpolate in E, A
     std::vector<double> prof_std = interpolateProfile2D(energy, angle);
 

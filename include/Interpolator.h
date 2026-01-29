@@ -15,7 +15,7 @@ class Interpolator {
     // generation externally or internally) The python code generates the grid
     // inside 'interpolate_with_dx'. Here we will return the profile on the
     // target grid provided as argument.
-    std::vector<double> getProfile(double energy, double angle, const std::vector<double>& targetDepths);
+    std::vector<double> getProfile(double energy, double angle, const std::vector<double>& targetDepths) const;
 
     const std::vector<double>& getDepthsStd() const { return depths_std; }
 
@@ -35,18 +35,18 @@ class Interpolator {
     int n_angles;
     int n_depths;
 
-    InterpolationType interpolationType = InterpolationType::LINEAR;
+    InterpolationType interpolationType = InterpolationType::MAKIMA;
 
     // Helper to interpolate the profile vector at specific (E, A) on the
     // standard depth grid
-    std::vector<double> interpolateProfile2D(double energy, double angle);
+    std::vector<double> interpolateProfile2D(double energy, double angle) const;
 
     // Helper to interpolate 1D (standard grid -> target grid)
-    double interpolate1D(const std::vector<double>& x, const std::vector<double>& y, double xi);
+    double interpolate1D(const std::vector<double>& x, const std::vector<double>& y, double xi) const;
 
     // Spline helpers
-    std::vector<double> getSplineDerivatives(const std::vector<double>& x, const std::vector<double>& y, InterpolationType type);
-    double interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1);
+    std::vector<double> getSplineDerivatives(const std::vector<double>& x, const std::vector<double>& y, InterpolationType type) const;
+    double interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1) const;
 };
 
 #endif  // INCLUDE_INTERPOLATOR_H_

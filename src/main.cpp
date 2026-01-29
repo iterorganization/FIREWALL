@@ -9,6 +9,7 @@
 #include <vector>
 #include <fstream>
 #include <iterator>  // for back_inserter
+#include <span> // Requires C++20. If using C++17, use a polyfill or raw pointers.
 
 #include "ConfigParser.h"
 #include "Interpolator.h"
@@ -17,12 +18,26 @@
 #include "ArgParser.h"
 #include "PhysConst.h"
 
+// --- Helper to physically reorder vectors ---
+template <typename T>
+void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indices) {
+    if (data.size() != p_indices.size()) return; // Safety check
+    std::vector<T> sorted_data(data.size());
+    
+    #pragma omp parallel for schedule(static)
+    for (size_t i = 0; i < data.size(); ++i) {
+        sorted_data[i] = data[p_indices[i]];
+    }
+    data.swap(sorted_data);
+}
+
 struct Particles {
     std::vector<int> wall_id;
     std::vector<double> t_loss;
     std::vector<double> weight;
     std::vector<double> vx, vy, vz;
     std::vector<double> energy, angle;
+    
     Particles (std::string partPath){
         hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
         if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
@@ -65,8 +80,6 @@ struct Particles {
 
         H5Gclose(partGroup);
         H5Fclose(partFile);
-
-        // for (size_t i = 0; i < n_particles; ++i) std::cout << "Particle " << i << ": E = " << energy[i] << " eV\n";
     }
 };
 
@@ -125,19 +138,13 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    std::string configPath = args.configPath;
-    std::string wallPath = args.wallPath;
-    std::string partPath = args.partPath;
-    std::string interpPath = args.interpPath;
-    std::string outPath = args.outPath;
-
+    // --- Configuration Output ---
     std::cout << "Configuration:\n"
-                << "  Config File: " << configPath << "\n"
-                << "  Wall File:   " << wallPath << "\n"
-                << "  Part File:   " << partPath << "\n"
-                << "  Interp File: " << interpPath << "\n"
-                << "  Output File: " << outPath << "\n";
-    
+              << "  Config: " << args.configPath << "\n"
+              << "  Wall:   " << args.wallPath << "\n"
+              << "  Part:   " << args.partPath << "\n"
+              << "  Interp: " << args.interpPath << "\n"
+              << "  Output: " << args.outPath << "\n";
     if (args.wallIds.empty()) {
         std::cout << "  Walls:       All\n";
     } else {
@@ -152,17 +159,19 @@ int main(int argc, char* argv[]) {
     std::cout << "Loading data..." << std::endl;
 
     // Wall
-    hid_t wallFile = H5Fopen(wallPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-    if (wallFile < 0) throw std::runtime_error("Failed to open wall file: " + wallPath);
+    hid_t wallFile = H5Fopen(args.wallPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (wallFile < 0) throw std::runtime_error("Failed to open wall file: " + args.wallPath);
 
     std::vector<double> wall = Utils::readH5DoubleDataset(wallFile, "nodes");
     H5Fclose(wallFile);
 
     // Particles
-    Particles particles(partPath);
+    Particles particles(args.partPath);
 
-    // --- Sort and Filter ---
-    std::cout << "Sorting..." << std::endl;
+
+    // We physically reorder vectors so data for Wall X is contiguous in memory.
+    std::cout << "Sorting and reordering particles..." << std::endl;
+    
     size_t n_particles = particles.wall_id.size();
     std::vector<size_t> p_indices(n_particles);
     std::iota(p_indices.begin(), p_indices.end(), 0);
@@ -171,37 +180,46 @@ int main(int argc, char* argv[]) {
         return particles.wall_id[i] < particles.wall_id[j];
     });
 
-    // Find first non-zero ID
-    auto it_first_nonzero = std::find_if(p_indices.begin(), p_indices.end(), [&](size_t idx) {
-        return particles.wall_id[idx] != 0;
+    // 2. Apply Permutation to all data vectors
+    apply_permutation(particles.wall_id, p_indices);
+    apply_permutation(particles.t_loss, p_indices);
+    apply_permutation(particles.weight, p_indices);
+    apply_permutation(particles.vx, p_indices);
+    apply_permutation(particles.vy, p_indices);
+    apply_permutation(particles.vz, p_indices);
+    apply_permutation(particles.energy, p_indices);
+    // Note: 'angle' is not calculated yet, so we don't need to sort it.
+
+    // --- Filter Zero IDs ---
+    auto it_first_nonzero = std::find_if(particles.wall_id.begin(), particles.wall_id.end(), [](int id) {
+        return id != 0;
     });
 
-    if (it_first_nonzero == p_indices.end()) {
+    if (it_first_nonzero == particles.wall_id.end()) {
         std::cerr << "No non-zero particles found." << std::endl;
         return 1;
     }
 
-    // Slice from idx to end-1 (matching previous logic: copy from it_first_nonzero to end-1)
-    if (std::distance(it_first_nonzero, p_indices.end()) <= 1) {
+    // Determine the valid range in the sorted arrays
+    size_t start_offset = std::distance(particles.wall_id.begin(), it_first_nonzero);
+    // We also drop the last element (end-1) matching previous logic
+    size_t end_offset = n_particles - 1; 
+
+    if (start_offset >= end_offset) {
         std::cerr << "Not enough particles after filtering." << std::endl;
         return 1;
     }
 
-    // wall id indices
-    std::vector<size_t> valid_filtered_indices(it_first_nonzero, p_indices.end() - 1);
-
-    // Unique IDs
+    // --- Identify Unique IDs ---
     std::vector<int> unique_wall_ids;
-    if (!valid_filtered_indices.empty()) {
-        unique_wall_ids.push_back(particles.wall_id[valid_filtered_indices[0]]);
-        for (size_t i = 1; i < valid_filtered_indices.size(); ++i) {
-            if (particles.wall_id[valid_filtered_indices[i]] != particles.wall_id[valid_filtered_indices[i - 1]]) {
-                unique_wall_ids.push_back(particles.wall_id[valid_filtered_indices[i]]);
-            }
+    unique_wall_ids.push_back(particles.wall_id[start_offset]);
+    for (size_t i = start_offset + 1; i < end_offset; ++i) {
+        if (particles.wall_id[i] != particles.wall_id[i - 1]) {
+            unique_wall_ids.push_back(particles.wall_id[i]);
         }
     }
 
-    SimulationParams params(configPath);
+    SimulationParams params(args.configPath);
 
     double L_1 = params.L / params.L_sub;
     double L_2 = params.L - L_1;
@@ -209,7 +227,7 @@ int main(int argc, char* argv[]) {
     int N_x1 = static_cast<int>(L_1 / params.delta_x1);
     int N_x2 = static_cast<int>(L_2 / params.delta_x2);
     // --- Prepare Interpolator and Material ---
-    Interpolator interpolator(interpPath);
+    Interpolator interpolator(args.interpPath);
     Material material;
     Solver solver(material);
 
@@ -234,21 +252,25 @@ int main(int argc, char* argv[]) {
 
     // Identify ranges for each unique ID in valid_filtered_indices
     std::vector<std::pair<size_t, size_t>> ranges(N_select);
+    std::vector<NormVec> norm_vecs(N_select);
 
-    size_t current_idx = 0;
+    size_t current_idx = start_offset;
     for (int i = 0; i < N_select; ++i) {
         int uid = selected_wall_ids[i];
-        size_t start = current_idx;
-        while (current_idx < valid_filtered_indices.size() && particles.wall_id[valid_filtered_indices[current_idx]] == uid) {
+        
+        // Fast forward to the specific ID (handling gaps if user filtered IDs)
+        while(current_idx < end_offset && particles.wall_id[current_idx] < uid) {
             current_idx++;
         }
-        ranges[i] = {start, current_idx};
-    }
+        
+        size_t r_start = current_idx;
+        while (current_idx < end_offset && particles.wall_id[current_idx] == uid) {
+            current_idx++;
+        }
+        ranges[i] = {r_start, current_idx};
 
-    std::vector<NormVec> norm_vecs(N_select);
-    #pragma omp parallel for 
-    for (int i = 0; i < N_select; ++i){
-        norm_vecs[i] = NormVec(&wall[0], selected_wall_ids[i] * 9); 
+        // Compute Normal
+        norm_vecs[i] = NormVec(&wall[0], uid * 9);
     }
 
     // Target depths
@@ -282,7 +304,7 @@ int main(int argc, char* argv[]) {
     }
 
 // --- Parallel Loop ---
-  #pragma omp parallel for 
+  #pragma omp parallel for schedule(dynamic)
   for (int i = 0; i < N_select; ++i) {
       int wid = selected_wall_ids[i];
       size_t start = ranges[i].first;
@@ -372,9 +394,9 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Write Results ---
-    std::cout << "Writing results to " << outPath << "..." << std::endl;
-    hid_t resFile = H5Fcreate(outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-    if (resFile < 0) throw std::runtime_error("Failed to create result file: " + outPath);
+    std::cout << "Writing results to " << args.outPath << "..." << std::endl;
+    hid_t resFile = H5Fcreate(args.outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+    if (resFile < 0) throw std::runtime_error("Failed to create result file");
 
     std::vector<double> wall_ids_out(N_select);
     std::vector<double> surf_temps_out(N_select);
