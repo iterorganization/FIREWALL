@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <vector>
 
 #include "Utils.h"
 
@@ -123,6 +124,97 @@ double Interpolator::interpolate1D(const std::vector<double>& x, const std::vect
     return y0 + t * (y1 - y0);
 }
 
+std::vector<double> Interpolator::getSplineDerivatives(const std::vector<double>& x, const std::vector<double>& y, InterpolationType type) {
+    size_t n = x.size();
+    if (n < 5) {
+        // Fallback to zeros or simple slope if too small, but here we assume n is large
+        return std::vector<double>(n, 0.0);
+    }
+
+    std::vector<double> m(n - 1);
+    for (size_t i = 0; i < n - 1; ++i) {
+        m[i] = (y[i + 1] - y[i]) / (x[i + 1] - x[i]);
+    }
+
+    // Extended slopes with boundary extrapolation (Akima style)
+    // We need m[-2], m[-1] ... m[n-1], m[n]
+    // Store in a vector of size n+3 to handle indices easily: 0->-2, 1->-1, 2->0, ..., n->n-2, n+1->n-1, n+2->n
+    // Let's use direct variables for boundaries to avoid allocation if possible,
+    // but constructing a padded vector is cleaner.
+    
+    std::vector<double> m_ext;
+    m_ext.reserve(n + 3);
+
+    double m0 = m[0];
+    double m1 = m[1];
+    double m_minus_1 = 2.0 * m0 - m1;
+    double m_minus_2 = 2.0 * m_minus_1 - m0;
+
+    m_ext.push_back(m_minus_2);
+    m_ext.push_back(m_minus_1);
+    m_ext.insert(m_ext.end(), m.begin(), m.end());
+
+    double m_end_1 = m[n - 2];
+    double m_end_2 = m[n - 3];
+    double m_plus_1 = 2.0 * m_end_1 - m_end_2;
+    double m_plus_2 = 2.0 * m_plus_1 - m_end_1;
+
+    m_ext.push_back(m_plus_1);
+    m_ext.push_back(m_plus_2);
+
+    // Now m_ext[i+2] corresponds to m[i]
+    // We want d[i] for i=0..n-1
+    // d[i] uses m[i-2], m[i-1], m[i], m[i+1]
+    // In m_ext, m[i] is at index i+2.
+    // m[i-2] -> m_ext[i]
+    // m[i-1] -> m_ext[i+1]
+    // m[i]   -> m_ext[i+2]
+    // m[i+1] -> m_ext[i+3]
+
+    std::vector<double> derivs(n);
+
+    for (size_t i = 0; i < n; ++i) {
+        double m_im2 = m_ext[i];
+        double m_im1 = m_ext[i + 1];
+        double m_i = m_ext[i + 2];
+        double m_ip1 = m_ext[i + 3];
+
+        double w1 = 0.0, w2 = 0.0;
+
+        if (type == InterpolationType::AKIMA) {
+            w1 = std::abs(m_ip1 - m_i);
+            w2 = std::abs(m_im1 - m_im2);
+        } else if (type == InterpolationType::MAKIMA) {
+            w1 = std::abs(m_ip1 - m_i) + std::abs(m_ip1 + m_i) * 0.5;
+            w2 = std::abs(m_im1 - m_im2) + std::abs(m_im1 + m_im2) * 0.5;
+        }
+
+        if (std::abs(w1 + w2) < 1e-12) {
+            derivs[i] = (m_im1 + m_i) * 0.5;
+        } else {
+            derivs[i] = (w1 * m_im1 + w2 * m_i) / (w1 + w2);
+        }
+    }
+
+    return derivs;
+}
+
+double Interpolator::interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1) {
+    double h = x1 - x0;
+    if (std::abs(h) < 1e-12) return y0;
+
+    double t = (xi - x0) / h;
+    double t2 = t * t;
+    double t3 = t2 * t;
+
+    double h00 = 2.0 * t3 - 3.0 * t2 + 1.0;
+    double h10 = t3 - 2.0 * t2 + t;
+    double h01 = -2.0 * t3 + 3.0 * t2;
+    double h11 = t3 - t2;
+
+    return h00 * y0 + h10 * h * d0 + h01 * y1 + h11 * h * d1;
+}
+
 /**
  * Method that constructs the energy deposition profile
  * for the wished energy, angle and for desired grid shape.
@@ -135,10 +227,47 @@ std::vector<double> Interpolator::getProfile(double energy, double angle, const 
     // 1. Interpolate in E, A
     std::vector<double> prof_std = interpolateProfile2D(energy, angle);
 
-    // 2. Map to targetDepths
     std::vector<double> result(targetDepths.size());
-    for (size_t i = 0; i < targetDepths.size(); ++i) {
-        result[i] = interpolate1D(depths_std, prof_std, targetDepths[i]);
+
+    if (interpolationType == InterpolationType::LINEAR) {
+        // 2. Map to targetDepths using Linear
+        for (size_t i = 0; i < targetDepths.size(); ++i) {
+            result[i] = interpolate1D(depths_std, prof_std, targetDepths[i]);
+        }
+    } else {
+        // 2. Map to targetDepths using Spline (Akima/Makima)
+        std::vector<double> derivs = getSplineDerivatives(depths_std, prof_std, interpolationType);
+
+        // Assume sorted targetDepths for efficiency, but using lower_bound is safe and reasonably fast
+        for (size_t i = 0; i < targetDepths.size(); ++i) {
+            double xi = targetDepths[i];
+
+            // Handle out of bounds
+            if (xi <= depths_std.front()) {
+                result[i] = prof_std.front();
+                continue;
+            }
+            if (xi >= depths_std.back()) {
+                result[i] = prof_std.back();
+                continue;
+            }
+
+            auto it = std::lower_bound(depths_std.begin(), depths_std.end(), xi);
+            int idx = std::distance(depths_std.begin(), it);
+            if (idx == 0) idx = 1; // Should be handled by <= front() check but safety first
+
+            int idx0 = idx - 1;
+            int idx1 = idx;
+
+            double x0 = depths_std[idx0];
+            double x1 = depths_std[idx1];
+            double y0 = prof_std[idx0];
+            double y1 = prof_std[idx1];
+            double d0 = derivs[idx0];
+            double d1 = derivs[idx1];
+
+            result[i] = interpolateHermite(xi, x0, x1, y0, y1, d0, d1);
+        }
     }
     return result;
 }
