@@ -1,2 +1,3 @@
 scipy
 h5py
+pyvista

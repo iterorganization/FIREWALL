@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <fstream>
 #include <iostream>
+#include <span>
 
 #include "ConfigParser.h"
 #include "Material.h"
@@ -57,8 +58,8 @@ class Solver {
    public:
     explicit Solver(const Material& material);
 
-    void solve(const std::vector<double>& dE_dx, const std::vector<double>& weights,
-               const std::vector<double>& coll_times, const std::vector<double>& depths, const SimulationParams& params,
+    void solve(const std::vector<double>& dE_dx, const std::span<double>& weights,
+               const std::span<double>& coll_times, const std::vector<double>& depths, const SimulationParams& params,
                double coeff,
                std::vector<double>& out_T,      // NOLINT(runtime/references)
                std::vector<double>& out_times,  // NOLINT(runtime/references)
@@ -72,7 +73,7 @@ class Solver {
                                std::vector<double>& h_face,    // NOLINT(runtime/references)
                                std::vector<double>& dx_cell);  // NOLINT(runtime/references)
 
-    void compute_source(const std::vector<double>& dE_dx, const std::vector<double>& weights,
+    void compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights,
                         const std::vector<bool>& active_mask, double coeff, int N_x, int N_p,
                         std::vector<double>& src);  // NOLINT(runtime/references)
 

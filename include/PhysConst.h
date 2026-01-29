@@ -9,8 +9,8 @@ namespace PhysConst {
     constexpr double m_u_kg = 1.66053906660e-27;  // 1 atomic mass unit in kg
     
     // Conversion factors can be calculated by the compiler
-    constexpr double J_to_eV = m_u_kg * 6.24e12;           // Joules to eV conversion
-    constexpr double eV_to_J = e * 1e9;                 // eV to Joules
+    constexpr double J_to_MeV = m_u_kg * 6.24e12;           // Joules to eV conversion
+    constexpr double MeVmm_to_Jm = e * 1e9;                 // eV to Joules
 }
 
 #endif  // PHYS_CONST_H

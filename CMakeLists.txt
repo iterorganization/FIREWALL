@@ -27,7 +27,7 @@ add_library(core_lib STATIC
 )
 
 # Set C++ Standard specifically for this target
-target_compile_features(core_lib PUBLIC cxx_std_17)
+target_compile_features(core_lib PUBLIC cxx_std_20)
 
 # Include directories
 # PUBLIC = accessible to core_lib AND anything that links to it

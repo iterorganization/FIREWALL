@@ -59,7 +59,7 @@ void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<dou
  * N_x:         Number of nodes in the in depth grid. N_p:         Number of
  * macroparticles. src:         Source term.
  */
-void Solver::compute_source(const std::vector<double>& dE_dx, const std::vector<double>& weights, const std::vector<bool>& active_mask, double coeff,
+void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff,
                             int N_x, int N_p, std::vector<double>& src) {
     src.assign(N_x, 0.0);
 
@@ -263,7 +263,7 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
  * grid. out_Nt:     Number of time points at which the temperature profile is
  * evaluated.
  */
-void Solver::solve(const std::vector<double>& dE_dx, const std::vector<double>& weights, const std::vector<double>& coll_times,
+void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::span<double>& coll_times,
                    const std::vector<double>& depths, const SimulationParams& params, double coeff, std::vector<double>& out_T, std::vector<double>& out_times,
                    int& out_Nx, int& out_Nt) {
     double dt_small = params.dt_small;

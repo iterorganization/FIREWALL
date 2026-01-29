@@ -123,7 +123,7 @@ int main(int argc, char* argv[]) {
         std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths_mm);
 
         for (size_t d = 0; d < prof.size(); ++d)
-            dE_dx[d * n_particles + j] = prof[d] * PhysConst::eV_to_J;
+            dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeVmm_to_Jm;
     }
 
     // Solve Heat Eq
