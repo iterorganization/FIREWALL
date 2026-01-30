@@ -48,7 +48,8 @@ struct Particles {
             throw std::runtime_error("Failed to open group 'groups/001' in " + partPath);
         }
 
-        size_t n_particles = Utils::getNumParticles(partPath);
+        std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
+        size_t n_particles = i_elm.size();
 
         printf("Total particles in file: %zu\n", n_particles);
 
@@ -62,7 +63,6 @@ struct Particles {
         energy.resize(n_particles);
         angle.resize(n_particles);
 
-        std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
         std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
 
         #pragma omp parallel for
@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
     std::iota(p_indices.begin(), p_indices.end(), 0);
 
     std::sort(p_indices.begin(), p_indices.end(), [&](size_t i, size_t j) {
-        return particles.wall_id[i] < particles.wall_id[j];
+        return particles.wall_id[i] < particles.wall_id[j] || (particles.wall_id[i] == particles.wall_id[j] && particles.t_loss[i] < particles.t_loss[j]);
     });
 
     // 2. Apply Permutation to all data vectors
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
 
     // --- Filter Zero IDs ---
     auto it_first_nonzero = std::find_if(particles.wall_id.begin(), particles.wall_id.end(), [](int id) {
-        return id != 0;
+        return id > 0;
     });
 
     if (it_first_nonzero == particles.wall_id.end()) {
@@ -203,7 +203,7 @@ int main(int argc, char* argv[]) {
     // Determine the valid range in the sorted arrays
     size_t start_offset = std::distance(particles.wall_id.begin(), it_first_nonzero);
     // We also drop the last element (end-1) matching previous logic
-    size_t end_offset = n_particles - 1; 
+    size_t end_offset = n_particles; 
 
     if (start_offset >= end_offset) {
         std::cerr << "Not enough particles after filtering." << std::endl;

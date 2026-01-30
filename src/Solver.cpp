@@ -223,10 +223,11 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
 
     std::vector<double> a, b, c, d;
 
-    int max_iter = 20;
-    double tol = 1e-6;
+    int max_iter = 100;
+    double tol = 1e-11;
 
-    for (int m = 0; m < max_iter; ++m) {
+    int m; double maxdiff;
+    for (m = 0; m < max_iter; ++m) {
         for (size_t i = 0; i < N; ++i) {
             rho_nodes[i] = mat.getRho(T_guess[i]);
             cp_nodes[i] = mat.getCp(T_guess[i]);
@@ -236,7 +237,7 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
         assemble_tridiag(T_guess, Tn, rho_cp_nodes, src, dt, h_face, dx_cell, a, b, c, d);
         T_new = thomas_solve(a, b, c, d);
 
-        double maxdiff = 0.0;
+        maxdiff = 0.0;
         for (size_t i = 0; i < N; ++i) {
             double diff = std::abs(T_new[i] - T_guess[i]);
             if (diff > maxdiff) maxdiff = diff;
@@ -244,6 +245,10 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
 
         T_guess = T_new;
         if (maxdiff < tol) break;
+    }
+
+    if (m == max_iter) {
+        std::cerr << "Warning: implicit_step did not converge in " << max_iter << " iterations. maxdiff=" << maxdiff << std::endl;
     }
 
     Tn = T_guess;
