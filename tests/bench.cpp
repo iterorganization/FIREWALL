@@ -15,13 +15,7 @@
 #include "Utils.h"
 #include "ArgParser.h"
 #include "PhysConst.h"
-
-struct Particles {
-    std::vector<double> t_loss;
-    std::vector<double> weight;
-    std::vector<double> energy, angle;
-    Particles (size_t n) : t_loss(n), weight(n), energy(n), angle(n) {}
-};
+#include "Particle.h"
 
 int main(int argc, char* argv[]) {
     BenchArgParser::Args args = BenchArgParser::parse(argc, argv);
@@ -65,7 +59,7 @@ int main(int argc, char* argv[]) {
     H5Fclose(partFile);
 
     size_t n_particles = weight.size();
-    Particles particles(n_particles);
+    BenchParticles particles(n_particles);
 
     for (size_t i = 0; i < n_particles; ++i) {
         particles.t_loss[i] = t_loss[i];

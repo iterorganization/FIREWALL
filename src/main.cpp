@@ -17,122 +17,17 @@
 #include "Utils.h"
 #include "ArgParser.h"
 #include "PhysConst.h"
+#include "NormVec.h"
+#include "Particle.h"
 
 using fpType = double;
 using v = std::vector<fpType>;
 using vv = std::vector<std::vector<fpType>>;
 using vvv = std::vector<std::vector<std::vector<fpType>>>;
 
-// --- Helper to physically reorder vectors ---
-template <typename T>
-void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indices) {
-    if (data.size() != p_indices.size()) return; // Safety check
-    std::vector<T> sorted_data(data.size());
-    
-    #pragma omp parallel for schedule(static)
-    for (size_t i = 0; i < data.size(); ++i) {
-        sorted_data[i] = data[p_indices[i]];
-    }
-    data.swap(sorted_data);
-}
-
-struct Particles {
-    std::vector<int> wall_id;
-    std::vector<double> t_loss;
-    std::vector<double> weight;
-    std::vector<double> vx, vy, vz;
-    std::vector<double> energy, angle;
-    
-    Particles (std::string partPath){
-        hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-        if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
-
-        hid_t partGroup = H5Gopen2(partFile, "groups/001", H5P_DEFAULT);
-        if (partGroup < 0) {
-            H5Fclose(partFile);
-            throw std::runtime_error("Failed to open group 'groups/001' in " + partPath);
-        }
-
-        std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
-        size_t n_particles = i_elm.size();
-
-        printf("Total particles in file: %zu\n", n_particles);
-
-        t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
-        weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
-
-        wall_id.resize(n_particles);
-        vx.resize(n_particles);
-        vy.resize(n_particles);
-        vz.resize(n_particles);
-        energy.resize(n_particles);
-        angle.resize(n_particles);
-
-        std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
-
-        #pragma omp parallel for
-        for (size_t i = 0; i < n_particles; ++i) {
-            wall_id[i] = -i_elm[i];  // Python code flips sign: wetted_sorted = -wetted_elements[sort_idx]
-            vx[i] = v_flat[i * 3 + 0];
-            vy[i] = v_flat[i * 3 + 1];
-            vz[i] = v_flat[i * 3 + 2];
-            const double p_norm = std::sqrt(vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
-            const double pc = p_norm * PhysConst::c;
-            const double m0c2 = PhysConst::m_e_u * PhysConst::c * PhysConst::c;
-            const double E = (std::sqrt(pc * pc + m0c2 * m0c2) - m0c2) * PhysConst::J_to_MeV;
-            energy[i] = E;
-        }
-
-        H5Gclose(partGroup);
-        H5Fclose(partFile);
-    }
-};
-
 struct Result {
     int wall_id;
     double surf_temp;
-};
-
-struct NormVec {
-    double x, y, z, len;
-
-    NormVec() : x(0), y(0), z(0), len(0) {}
-
-    // Add 'inline' to suggest the compiler paste this code directly into the caller
-    inline NormVec(const double* wall, int offset) {
-        // 1. Point directly to the data. 
-        // This creates no new arrays, just looks at existing memory.
-        const double* p0 = &wall[offset];     // or wall + offset
-        const double* p1 = &wall[offset + 3];
-        const double* p2 = &wall[offset + 6];
-
-        // 2. Calculate vector components using scalars (doubles).
-        // Compilers will map these directly to CPU registers (XMM/YMM), 
-        // avoiding memory writes entirely.
-        double ax = p1[0] - p0[0];
-        double ay = p1[1] - p0[1];
-        double az = p1[2] - p0[2];
-
-        double bx = p2[0] - p0[0];
-        double by = p2[1] - p0[1];
-        double bz = p2[2] - p0[2];
-
-        // 3. Cross product
-        x = ay * bz - az * by;
-        y = az * bx - ax * bz;
-        z = ax * by - ay * bx;
-
-        // 4. Normalize
-        len = std::sqrt(x * x + y * y + z * z);
-        
-        // Prevent division by zero if points are identical/collinear
-        if (len > 0) {
-            double invLen = 1.0 / len; // Multiplication is faster than division
-            x *= invLen;
-            y *= invLen;
-            z *= invLen;
-        }
-    }
 };
 
 int main(int argc, char* argv[]) {
@@ -171,7 +66,6 @@ int main(int argc, char* argv[]) {
 
     // Particles
     Particles particles(args.partPath);
-
 
     // We physically reorder vectors so data for Wall X is contiguous in memory.
     std::cout << "Sorting and reordering particles..." << std::endl;
