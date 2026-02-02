@@ -10,7 +10,7 @@ namespace PhysConst {
     
     // Conversion factors can be calculated by the compiler
     constexpr double J_to_MeV = m_u_kg * 6.24e12;           // Joules to eV conversion
-    constexpr double MeVmm_to_Jm = e * 1e9;                 // eV to Joules
+    constexpr double MeV_to_J = e * 1e9;                 // eV to Joules
 }
 
 #endif  // PHYS_CONST_H
