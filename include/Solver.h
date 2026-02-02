@@ -70,7 +70,7 @@ class Solver {
     Material mat;
 
 
-    void compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff, std::vector<double>& src) const ;
+    void compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<char>& active_mask, double coeff, std::vector<double>& src) const ;
 
     void assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn,
                           const std::vector<double>& rho_cp_nodes, const std::vector<double>& src, double dt,
@@ -82,9 +82,7 @@ class Solver {
     std::vector<double> thomas_solve(const std::vector<double>& a, const std::vector<double>& b,
                                      const std::vector<double>& c, const std::vector<double>& d) const;
 
-    std::vector<double> implicit_step(const std::vector<double>& Tn, // NOLINT(runtime/references)
-                       const std::vector<double>& src, double dt, const std::vector<double>& h_face,
-                       const std::vector<double>& dx_cell) const;
+    std::vector<double> implicit_step(const std::vector<double>& Tn, const std::vector<double>& src, double dt) const;
 
     std::vector<double> h_face;
     std::vector<double> dx_cell;

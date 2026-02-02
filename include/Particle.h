@@ -22,15 +22,18 @@ void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indice
     data.swap(sorted_data);
 }
 
-struct BenchParticles {
+class BenchParticles {
+    public:
     std::vector<double> t_loss;
     std::vector<double> weight;
     std::vector<double> energy, angle;
-    BenchParticles (size_t n) : t_loss(n), weight(n), energy(n), angle(n) {}
+    int n_particles;
+    BenchParticles (size_t n) : t_loss(n), weight(n), energy(n), angle(n), n_particles(n) {}
     BenchParticles () {}
 };
 
-struct Particles : public BenchParticles {
+class Particles : public BenchParticles {
+    public:
     std::vector<int> wall_id;
     std::vector<double> vx, vy, vz;
     
@@ -45,7 +48,7 @@ struct Particles : public BenchParticles {
         }
 
         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
-        size_t n_particles = i_elm.size();
+        n_particles = i_elm.size();
 
         printf("Total particles in file: %zu\n", n_particles);
 
@@ -61,6 +64,9 @@ struct Particles : public BenchParticles {
 
         std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
 
+        H5Gclose(partGroup);
+        H5Fclose(partFile);
+
         #pragma omp parallel for
         for (size_t i = 0; i < n_particles; ++i) {
             wall_id[i] = -i_elm[i];  // Python code flips sign: wetted_sorted = -wetted_elements[sort_idx]
@@ -74,8 +80,63 @@ struct Particles : public BenchParticles {
             energy[i] = E;
         }
 
-        H5Gclose(partGroup);
-        H5Fclose(partFile);
+        // We physically reorder vectors so data for Wall X is contiguous in memory.
+        std::cout << "Sorting and reordering particles..." << std::endl;
+        
+        size_t n_particles = wall_id.size();
+        std::vector<size_t> p_indices(n_particles);
+        std::iota(p_indices.begin(), p_indices.end(), 0);
+
+        std::sort(p_indices.begin(), p_indices.end(), [&](size_t i, size_t j) {
+            return wall_id[i] < wall_id[j] || (wall_id[i] == wall_id[j] && t_loss[i] < t_loss[j]);
+        });
+
+        // 2. Apply Permutation to all data vectors
+        apply_permutation(wall_id, p_indices);
+        apply_permutation(t_loss, p_indices);
+        apply_permutation(weight, p_indices);
+        apply_permutation(vx, p_indices);
+        apply_permutation(vy, p_indices);
+        apply_permutation(vz, p_indices);
+        apply_permutation(energy, p_indices);
+        // Note: 'angle' is not calculated yet, so we don't need to sort it.
+
+        // --- Filter Zero IDs ---
+        auto it_first_nonzero = std::find_if(wall_id.begin(), wall_id.end(), [](int id) {
+            return id > 0;
+        });
+
+        if (it_first_nonzero == wall_id.end()) std::cerr << "No non-zero particles found." << std::endl;
+
+        // Determine the valid range in the sorted arrays
+        size_t start_offset = std::distance(wall_id.begin(), it_first_nonzero);
+        // We also drop the last element (end-1) matching previous logic
+        size_t end_offset = n_particles; 
+
+        if (start_offset >= end_offset) std::cerr << "Not enough particles after filtering." << std::endl;
+
+        // Resize all vectors to keep only valid particles
+
+        wall_id = std::vector<int>(wall_id.begin() + start_offset, wall_id.begin() + end_offset);
+        t_loss = std::vector<double>(t_loss.begin() + start_offset, t_loss.begin() + end_offset);
+        weight = std::vector<double>(weight.begin() + start_offset, weight.begin() + end_offset);
+        vx = std::vector<double>(vx.begin() + start_offset, vx.begin() + end_offset);
+        vy = std::vector<double>(vy.begin() + start_offset, vy.begin() + end_offset);
+        vz = std::vector<double>(vz.begin() + start_offset, vz.begin() + end_offset);
+        energy = std::vector<double>(energy.begin() + start_offset, energy.begin() + end_offset);
+    }
+
+    std::vector<int> get_unique_wall_ids () {
+        // --- Identify Unique IDs ---
+        std::vector<int> unique_wall_ids;
+        unique_wall_ids.push_back(wall_id[0]);
+        for (size_t i = 1; i < wall_id.size(); ++i) {
+            if (wall_id[i] != wall_id[i - 1]) {
+                unique_wall_ids.push_back(wall_id[i]);
+            }
+        }
+
+        return unique_wall_ids;
     }
 };
 

@@ -25,6 +25,51 @@ using v = std::vector<fpType>;
 using vv = std::vector<std::vector<fpType>>;
 using vvv = std::vector<std::vector<std::vector<fpType>>>;
 
+std::vector<std::pair<size_t, size_t>> get_particle_ranges(const Particles& particles, const std::vector<int>& selected_wall_ids) {
+    int N_select = selected_wall_ids.size();
+    std::vector<std::pair<size_t, size_t>> ranges(N_select);
+    size_t current_idx = 0;
+        for (int i = 0; i < N_select; ++i) {
+            int uid = selected_wall_ids[i];
+            
+            // Fast forward to the specific ID (handling gaps if user filtered IDs)
+            while(current_idx < particles.n_particles && particles.wall_id[current_idx] < uid) {
+                current_idx++;
+            }
+            
+            size_t r_start = current_idx;
+            while (current_idx < particles.n_particles && particles.wall_id[current_idx] == uid) {
+                current_idx++;
+            }
+            ranges[i] = {r_start, current_idx};
+        }
+    return ranges;
+}
+
+
+std::vector<double> construct_target_depths(const SimulationParams& params) {
+    double L_1 = params.L / params.L_sub;
+    double L_2 = params.L - L_1;
+    int N_x1 = static_cast<int>(L_1 / params.delta_x1);
+    int N_x2 = static_cast<int>(L_2 / params.delta_x2);
+
+    // Target depths
+    std::vector<double> target_depths(N_x1 + N_x2);
+    target_depths[0] = 0.0;
+    for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
+        double spacing;
+        if (d < N_x1 - 1)
+            spacing = params.delta_x1;
+        else if (d == N_x1 - 1)
+            spacing = 0.5 * (params.delta_x1 + params.delta_x2);
+        else
+            spacing = params.delta_x2;
+        target_depths[d + 1] = target_depths[d] + spacing;
+    }
+    return target_depths;
+}
+    
+
 struct Result {
     int wall_id;
     double surf_temp;
@@ -67,55 +112,7 @@ int main(int argc, char* argv[]) {
     // Particles
     Particles particles(args.partPath);
 
-    // We physically reorder vectors so data for Wall X is contiguous in memory.
-    std::cout << "Sorting and reordering particles..." << std::endl;
-    
-    size_t n_particles = particles.wall_id.size();
-    std::vector<size_t> p_indices(n_particles);
-    std::iota(p_indices.begin(), p_indices.end(), 0);
-
-    std::sort(p_indices.begin(), p_indices.end(), [&](size_t i, size_t j) {
-        return particles.wall_id[i] < particles.wall_id[j] || (particles.wall_id[i] == particles.wall_id[j] && particles.t_loss[i] < particles.t_loss[j]);
-    });
-
-    // 2. Apply Permutation to all data vectors
-    apply_permutation(particles.wall_id, p_indices);
-    apply_permutation(particles.t_loss, p_indices);
-    apply_permutation(particles.weight, p_indices);
-    apply_permutation(particles.vx, p_indices);
-    apply_permutation(particles.vy, p_indices);
-    apply_permutation(particles.vz, p_indices);
-    apply_permutation(particles.energy, p_indices);
-    // Note: 'angle' is not calculated yet, so we don't need to sort it.
-
-    // --- Filter Zero IDs ---
-    auto it_first_nonzero = std::find_if(particles.wall_id.begin(), particles.wall_id.end(), [](int id) {
-        return id > 0;
-    });
-
-    if (it_first_nonzero == particles.wall_id.end()) {
-        std::cerr << "No non-zero particles found." << std::endl;
-        return 1;
-    }
-
-    // Determine the valid range in the sorted arrays
-    size_t start_offset = std::distance(particles.wall_id.begin(), it_first_nonzero);
-    // We also drop the last element (end-1) matching previous logic
-    size_t end_offset = n_particles; 
-
-    if (start_offset >= end_offset) {
-        std::cerr << "Not enough particles after filtering." << std::endl;
-        return 1;
-    }
-
-    // --- Identify Unique IDs ---
-    std::vector<int> unique_wall_ids;
-    unique_wall_ids.push_back(particles.wall_id[start_offset]);
-    for (size_t i = start_offset + 1; i < end_offset; ++i) {
-        if (particles.wall_id[i] != particles.wall_id[i - 1]) {
-            unique_wall_ids.push_back(particles.wall_id[i]);
-        }
-    }
+    std::vector<int> unique_wall_ids = particles.get_unique_wall_ids();
 
     SimulationParams params(args.configPath);
 
@@ -137,83 +134,44 @@ int main(int argc, char* argv[]) {
         if (selected_wall_ids.empty()) std::cerr << "Warning: None of the requested wall IDs were found.\n";
     }
     
-    
-    int N_select = selected_wall_ids.size();
-    
-    std::cout << "Processing " << N_select << " elements using OpenMP..." << std::endl;
+    std::cout << "Processing " << selected_wall_ids.size() << " elements using OpenMP..." << std::endl;
     std::cout << "Max threads: " << omp_get_max_threads() << std::endl;
-    
-    std::vector<Result> results(N_select);
-    
+        
     // Identify ranges for each unique ID in valid_filtered_indices
-    std::vector<std::pair<size_t, size_t>> ranges(N_select);
-    std::vector<NormVec> norm_vecs(N_select);
+    std::vector<std::pair<size_t, size_t>> ranges = get_particle_ranges(particles, selected_wall_ids);
     
-    size_t current_idx = start_offset;
-    for (int i = 0; i < N_select; ++i) {
-        int uid = selected_wall_ids[i];
-        
-        // Fast forward to the specific ID (handling gaps if user filtered IDs)
-        while(current_idx < end_offset && particles.wall_id[current_idx] < uid) {
-            current_idx++;
-        }
-        
-        size_t r_start = current_idx;
-        while (current_idx < end_offset && particles.wall_id[current_idx] == uid) {
-            current_idx++;
-        }
-        ranges[i] = {r_start, current_idx};
-        
-        // Compute Normal
-        norm_vecs[i] = NormVec(&wall[0], uid * 9);
-    }
-    
-    // Target depths
-    std::vector<double> target_depths(N_x1 + N_x2);
-    target_depths[0] = 0.0;
-    for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
-        double spacing;
-        if (d < N_x1 - 1)
-        spacing = params.delta_x1;
-        else if (d == N_x1 - 1)
-        spacing = 0.5 * (params.delta_x1 + params.delta_x2);
-        else
-        spacing = params.delta_x2;
-        target_depths[d + 1] = target_depths[d] + spacing;
-    }
-    
-    std::vector<double> times;
+    // Target Depth Grid
+    std::vector<double> target_depths = construct_target_depths(params);
 
+    std::vector<double> times;
     times.push_back(params.t_start);
     while (times.back() < params.t_end) times.push_back(times.back() + (times.back() >= params.t_interm && params.t_interm > params.t_start ? params.dt_large : params.dt_small) );
-    
-    vvv all_out_T(N_select, vv(times.size(), v(target_depths.size(), 0.0)));
-    
-    // Save T[:, 0]
-    for (int wid = 0; wid < N_select; wid++) {
-        for (int xi = 0; xi < target_depths.size(); xi++) {
-            all_out_T[wid][0][xi] = params.T_ini;
-        }
-    }
-    
+        
     const Interpolator interpolator(args.interpPath);
     const Solver solver({}, target_depths);  // Empty material for now.
+    std::vector<Result> results(selected_wall_ids.size());
     
     // --- Parallel Loop ---
     #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < N_select; ++i) {
-    int wid = selected_wall_ids[i];
-        size_t start = ranges[i].first;
-        size_t end = ranges[i].second;
-        size_t count = end - start;
+    for (int i = 0; i < selected_wall_ids.size(); ++i) {
+        vv out_T (times.size(), v(target_depths.size(), 0.0));
+    
+        // Save T[:, 0]
+        for (int xi = 0; xi < target_depths.size(); xi++) 
+            out_T[0][xi] = params.T_ini;
+
+        const int wid = selected_wall_ids[i];
+        const size_t start = ranges[i].first;
+        const size_t end = ranges[i].second;
+        const size_t count = end - start;
 
         // Offset check was here but NormVec is computed outside now. 
         // We can check validity of wid still if needed, but NormVec construction likely assumed valid.
         
-        NormVec norm_vec = norm_vecs[i]; // Use precomputed
+        const NormVec norm_vec(wall.data(), wid * 9);
 
-        double area = 0.5 * norm_vec.len;
-        double coeff = 1.0 / (area * params.t_dep);
+        const double area = 0.5 * norm_vec.len;
+        const double coeff = 1.0 / (area * params.t_dep);
 
         for (size_t k = start; k < end; ++k) {
             const double dot = particles.vx[k] * norm_vec.x + particles.vy[k] * norm_vec.y + particles.vz[k] * norm_vec.z;
@@ -236,26 +194,20 @@ int main(int argc, char* argv[]) {
 
             // Store in dE_dx (Depth-Major)
             // dE_dx[depth_idx * count + particle_idx]
-            for (size_t d = 0; d < prof.size(); ++d) {
+            for (size_t d = 0; d < prof.size(); ++d)
                 dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeV_to_J;  // Apply conv_factor2 here to match
-                                                                // python passing `conv_factor2 * dE_dx`
-            }
         }
 
-        auto weight_view = std::span(particles.weight).subspan(start, count);
-        auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
+        const auto weight_view = std::span(particles.weight).subspan(start, count);
+        const auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
 
-        solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, all_out_T[i]);
+        solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, out_T);
 
         double surf_temp = -1e20;
 
-        for (size_t tstep = 0; tstep < times.size(); ++tstep) {
-            for (size_t xi = 0; xi < all_out_T[i].size(); ++xi) {
-                if (all_out_T[i][tstep][xi] > surf_temp) {
-                    surf_temp = all_out_T[i][tstep][xi];
-                }
-            }
-        }
+        // TODO ask about this logic to Victor
+        for (size_t tstep = 0; tstep < times.size(); ++tstep)
+            surf_temp = std::max(surf_temp, out_T[tstep][0]);
 
         results[i].wall_id = wid;
         results[i].surf_temp = surf_temp;
@@ -266,16 +218,16 @@ int main(int argc, char* argv[]) {
     hid_t resFile = H5Fcreate(args.outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     if (resFile < 0) throw std::runtime_error("Failed to create result file");
 
-    std::vector<double> wall_ids_out(N_select);
-    std::vector<double> surf_temps_out(N_select);
+    std::vector<double> wall_ids_out(selected_wall_ids.size());
+    std::vector<double> surf_temps_out(selected_wall_ids.size());
 
-    for (int i = 0; i < N_select; ++i) {
+    for (int i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
         surf_temps_out[i] = results[i].surf_temp;
     }
 
     // Write datasets
-    hsize_t dims1[1] = {(hsize_t)N_select};
+    hsize_t dims1[1] = {(hsize_t)selected_wall_ids.size()};
     hid_t space1 = H5Screate_simple(1, dims1, NULL);
 
     hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);

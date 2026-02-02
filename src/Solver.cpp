@@ -59,17 +59,28 @@ void Solver::build_two_region_grid(const std::vector<double>& depths) {
  * N_x:         Number of nodes in the in depth grid. N_p:         Number of
  * macroparticles. src:         Source term.
  */
-void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff, std::vector<double>& src) const {
+void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<char>& active_mask, double coeff, std::vector<double>& src) const {
+    size_t width = active_mask.size();
 
-// Parallelize over spatial grid
-#pragma omp parallel for
+    // Parallelize over spatial grid
+    #pragma omp parallel for schedule(static)
     for (int i = 0; i < src.size(); ++i) {
         double s = 0.0;
+        
+        // Hoist the row offset calculation out of the inner loop
+        size_t row_offset = i * width; 
 
-        for (int j = 0; j < active_mask.size(); ++j) {
-            if (active_mask[j]) {
-                s += dE_dx[i * active_mask.size() + j] * weights[j];
-            }
+        // 1. We removed the 'if' branch.
+        // 2. We use direct multiplication: val * weight * mask_flag
+        // 3. This allows the compiler to use AVX/SIMD (processing 8 doubles at once)
+        
+        // Note: explicit 'omp simd' guides the compiler, but -O3 often does this automatically 
+        // if the branch is gone.
+        #pragma omp simd reduction(+:s)
+        for (int j = 0; j < width; ++j) {
+            // Branchless version:
+            // If active_mask[j] is 0, the term becomes 0.0
+            s += dE_dx[row_offset + j] * weights[j] * active_mask[j];
         }
         src[i] = coeff * s;
     }
@@ -209,8 +220,7 @@ std::vector<double> Solver::thomas_solve(const std::vector<double>& a, const std
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const std::vector<double>& src, double dt, const std::vector<double>& h_face,
-                           const std::vector<double>& dx_cell) const {
+std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const std::vector<double>& src, double dt) const {
     size_t N = Tn.size();
     std::vector<double> T_guess = Tn;  // Copy
     std::vector<double> T_new;
@@ -269,7 +279,7 @@ std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const s
 void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::span<double>& coll_times,
                    const SimulationParams& params, double coeff, const std::vector<double>& times, std::vector<std::vector<double>>& out_T) const {
 
-    std::vector<bool> active_mask(coll_times.size());
+    std::vector<char> active_mask(coll_times.size(), 0);
     std::vector<double> src(out_T[0].size(), 0.0);
 
     constexpr double T_m = 1e4;  // Melting point of Tungsten in K
@@ -284,7 +294,7 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& we
         
         compute_source(dE_dx, weights, active_mask, coeff, src);
         
-        out_T[i] = implicit_step(out_T[i-1], src, times[i] - times[i-1], h_face, dx_cell);
+        out_T[i] = implicit_step(out_T[i-1], src, times[i] - times[i-1]);
 
         if (out_T[i][0] > T_m ) {
             for (int k = i; k < times.size(); ++k) out_T[k] = out_T[i];
