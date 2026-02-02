@@ -223,7 +223,7 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
 
     std::vector<double> a, b, c, d;
 
-    int max_iter = 100;
+    int max_iter = 10;
     double tol = 1e-11;
 
     int m; double maxdiff;
