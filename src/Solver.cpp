@@ -272,6 +272,8 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& we
     std::vector<bool> active_mask(coll_times.size());
     std::vector<double> src(out_T[0].size(), 0.0);
 
+    constexpr double T_m = 1e4;  // Melting point of Tungsten in K
+
     
     for (int i = 1; i < times.size(); ++i) {
         
@@ -283,6 +285,10 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& we
         compute_source(dE_dx, weights, active_mask, coeff, src);
         
         out_T[i] = implicit_step(out_T[i-1], src, times[i] - times[i-1], h_face, dx_cell);
-        
+
+        if (out_T[i][0] > T_m ) {
+            for (int k = i; k < times.size(); ++k) out_T[k] = out_T[i];
+            break;
+        }       
     }
 }
