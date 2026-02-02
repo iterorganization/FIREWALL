@@ -182,31 +182,19 @@ int main(int argc, char* argv[]) {
         target_depths[d + 1] = target_depths[d] + spacing;
     }
     
+    std::vector<double> times;
+
+    times.push_back(params.t_start);
+    while (times.back() < params.t_end) times.push_back(times.back() + (times.back() >= params.t_interm && params.t_interm > params.t_start ? params.dt_large : params.dt_small) );
     
-    int N_t = 0;
-    int N_x = target_depths.size();
-    
-    if (params.t_interm <= params.t_start || params.t_interm >= params.t_end || params.t_interm == 0.0) {
-        N_t = static_cast<int>(std::ceil((params.t_end - params.t_start) / params.dt_small) + 1);
-        params.t_interm = params.t_end + 1.0;
-    } else {
-        int Nt1 = static_cast<int>(std::ceil((params.t_interm - params.t_start) / params.dt_small));
-        int Nt2 = static_cast<int>(std::ceil((params.t_end - params.t_interm) / params.dt_large));
-        N_t = Nt1 + Nt2 + 1;
-    }
-    
-    vvv all_out_T(N_select, vv(N_t, v(N_x, 0.0)));
-    v all_out_times(N_t, 0.0);
+    vvv all_out_T(N_select, vv(times.size(), v(target_depths.size(), 0.0)));
     
     // Save T[:, 0]
     for (int wid = 0; wid < N_select; wid++) {
-        for (int xi = 0; xi < N_x; xi++) {
+        for (int xi = 0; xi < target_depths.size(); xi++) {
             all_out_T[wid][0][xi] = params.T_ini;
         }
     }
-    
-    // Save t=0
-    all_out_times[0] = params.t_start;
     
     const Interpolator interpolator(args.interpPath);
     const Solver solver({}, target_depths);  // Empty material for now.
@@ -257,11 +245,11 @@ int main(int argc, char* argv[]) {
         auto weight_view = std::span(particles.weight).subspan(start, count);
         auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
 
-        solver.solve(dE_dx, weight_view, t_loss_view, target_depths, params, coeff, all_out_T[i], all_out_times);
+        solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, all_out_T[i]);
 
         double surf_temp = -1e20;
 
-        for (size_t tstep = 0; tstep < all_out_times.size(); ++tstep) {
+        for (size_t tstep = 0; tstep < times.size(); ++tstep) {
             for (size_t xi = 0; xi < all_out_T[i].size(); ++xi) {
                 if (all_out_T[i][tstep][xi] > surf_temp) {
                     surf_temp = all_out_T[i][tstep][xi];

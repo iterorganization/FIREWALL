@@ -22,12 +22,12 @@ Solver::Solver(const Material& material, const std::vector<double>& x) : mat(mat
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-void Solver::build_two_region_grid(const std::vector<double>& x) {
-    size_t N = x.size();
+void Solver::build_two_region_grid(const std::vector<double>& depths) {
+    size_t N = depths.size();
     if (N > 1) {
         h_face.resize(N - 1);
         for (size_t f = 0; f < N - 1; ++f) {
-            h_face[f] = x[f + 1] - x[f];
+            h_face[f] = depths[f + 1] - depths[f];
         }
     } else {
         h_face.clear();
@@ -91,7 +91,7 @@ void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<do
  * d:            Vector containing the d_i values.
  */
 void Solver::assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn, const std::vector<double>& rho_cp_nodes,
-                              const std::vector<double>& src, double dt, const std::vector<double>& h_face, const std::vector<double>& dx_cell,
+                              const std::vector<double>& src, double dt,
                               std::vector<double>& a, std::vector<double>& b, std::vector<double>& c, std::vector<double>& d) const {
     size_t N = T_guess.size();
     a.assign(N, 0.0);
@@ -232,7 +232,7 @@ std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const s
             rho_cp_nodes[i] = rho_nodes[i] * cp_nodes[i];
         }
 
-        assemble_tridiag(T_guess, Tn, rho_cp_nodes, src, dt, h_face, dx_cell, a, b, c, d);
+        assemble_tridiag(T_guess, Tn, rho_cp_nodes, src, dt, a, b, c, d);
         T_new = thomas_solve(a, b, c, d);
 
         maxdiff = 0.0;
@@ -267,41 +267,22 @@ std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const s
  * evaluated.
  */
 void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::span<double>& coll_times,
-                   const std::vector<double>& depths, const SimulationParams& params, double coeff, std::vector<std::vector<double>>& out_T, std::vector<double>& out_times) const {
-    double t_now = params.t_start;
-    double dt;
-    int n = 1;
+                   const SimulationParams& params, double coeff, const std::vector<double>& times, std::vector<std::vector<double>>& out_T) const {
 
-    int N_p = coll_times.size();
-    int N_x = depths.size();
+    std::vector<bool> active_mask(coll_times.size());
+    std::vector<double> src(out_T[0].size(), 0.0);
 
-    std::vector<bool> active_mask(N_p);
-    std::vector<double> src(N_x);
-
-    // Initial condition
-    // std::vector<double> T(N_x, params.T_ini);
-
-    while (n < out_times.size()) {
-        
+    
+    for (int i = 1; i < times.size(); ++i) {
         
         // Active mask
-        for (int j = 0; j < N_p; ++j) {
-            active_mask[j] = (coll_times[j] <= t_now) && (t_now <= (coll_times[j] + params.t_dep));
+        for (int j = 0; j < coll_times.size(); ++j) {
+            active_mask[j] = (coll_times[j] <= times[i]) && (times[i] <= (coll_times[j] + params.t_dep));
         }
         
         compute_source(dE_dx, weights, active_mask, coeff, src);
         
-        out_T[n] = implicit_step(out_T[n-1], src, dt, h_face, dx_cell);
+        out_T[i] = implicit_step(out_T[i-1], src, times[i] - times[i-1], h_face, dx_cell);
         
-        if (t_now >= params.t_interm)
-            dt = params.dt_large;
-        else
-            dt = params.dt_small;
-            
-        t_now += dt;
-
-        out_times[n] = t_now;
-        
-        n++;
     }
 }

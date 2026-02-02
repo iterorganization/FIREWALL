@@ -59,10 +59,10 @@ class Solver {
     explicit Solver(const Material& material, const std::vector<double>& x);
 
     void solve(const std::vector<double>& dE_dx, const std::span<double>& weights,
-               const std::span<double>& coll_times, const std::vector<double>& depths, const SimulationParams& params,
+               const std::span<double>& coll_times, const SimulationParams& params,
                double coeff,
-               std::vector<std::vector<double>>& out_T,             // NOLINT(runtime/references)
-               std::vector<double>& out_times) const;  // NOLINT(runtime/references)
+               const std::vector<double>& times,
+               std::vector<std::vector<double>>& out_T) const;  // NOLINT(runtime/references)
                
     void build_two_region_grid(const std::vector<double>& x);
 
@@ -74,7 +74,6 @@ class Solver {
 
     void assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn,
                           const std::vector<double>& rho_cp_nodes, const std::vector<double>& src, double dt,
-                          const std::vector<double>& h_face, const std::vector<double>& dx_cell,
                           std::vector<double>& a,   // NOLINT(runtime/references)
                           std::vector<double>& b,   // NOLINT(runtime/references)
                           std::vector<double>& c,   // NOLINT(runtime/references)
