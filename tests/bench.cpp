@@ -96,37 +96,21 @@ int main(int argc, char* argv[]) {
         target_depths[d + 1] = target_depths[d] + spacing;
     }
     
-    std::vector<double> target_depths_mm(N_x1 + N_x2);
-    double dx1_mm = params.delta_x1 * 1000.0;
-    double dx2_mm = params.delta_x2 * 1000.0;
-    
-    target_depths_mm[0] = 0.0;
-    for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
-        double spacing;
-        if (d < N_x1 - 1)
-            spacing = dx1_mm;
-        else if (d == N_x1 - 1)
-            spacing = 0.5 * (dx1_mm + dx2_mm);
-        else
-            spacing = dx2_mm;
-        target_depths_mm[d + 1] = target_depths_mm[d] + spacing;
-    }
-    
     const Interpolator interpolator(interpPath);
     const Solver solver({}, target_depths);
 
-    std::vector<double> dE_dx(target_depths_mm.size() * n_particles);
+    std::vector<double> dE_dx(target_depths.size() * n_particles);
     
     for (size_t j = 0; j < n_particles; ++j) {
         // Interpolate for this particle
-        std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths_mm);
+        std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths);
         
         for (size_t d = 0; d < prof.size(); ++d)
-        dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeVmm_to_Jm;
+        dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeV_to_J;
     }
 
     int N_t = 0;
-    int N_x = target_depths_mm.size();
+    int N_x = target_depths.size();
     
     if (params.t_interm <= params.t_start || params.t_interm >= params.t_end || params.t_interm == 0.0) {
         N_t = static_cast<int>(std::ceil((params.t_end - params.t_start) / params.dt_small) + 1);

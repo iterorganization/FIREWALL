@@ -288,24 +288,9 @@ int main(int argc, char* argv[]) {
         target_depths[d + 1] = target_depths[d] + spacing;
     }
     
-    std::vector<double> target_depths_mm(N_x1 + N_x2);
-    double dx1_mm = params.delta_x1 * 1000.0;
-    double dx2_mm = params.delta_x2 * 1000.0;
-    
-    target_depths_mm[0] = 0.0;
-    for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
-        double spacing;
-        if (d < N_x1 - 1)
-        spacing = dx1_mm;
-        else if (d == N_x1 - 1)
-        spacing = 0.5 * (dx1_mm + dx2_mm);
-        else
-        spacing = dx2_mm;
-        target_depths_mm[d + 1] = target_depths_mm[d] + spacing;
-    }
     
     int N_t = 0;
-    int N_x = target_depths_mm.size();
+    int N_x = target_depths.size();
     
     if (params.t_interm <= params.t_start || params.t_interm >= params.t_end || params.t_interm == 0.0) {
         N_t = static_cast<int>(std::ceil((params.t_end - params.t_start) / params.dt_small) + 1);
@@ -361,27 +346,24 @@ int main(int argc, char* argv[]) {
         }
 
         // Interpolate Profile
-        std::vector<double> dE_dx(target_depths_mm.size() * count);
+        std::vector<double> dE_dx(target_depths.size() * count);
 
         for (size_t j = start; j < end; ++j) {
             // Interpolate for this particle
-            std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths_mm);
+            std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths);
 
             // Store in dE_dx (Depth-Major)
             // dE_dx[depth_idx * count + particle_idx]
             for (size_t d = 0; d < prof.size(); ++d) {
-                dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeVmm_to_Jm;  // Apply conv_factor2 here to match
+                dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeV_to_J;  // Apply conv_factor2 here to match
                                                                 // python passing `conv_factor2 * dE_dx`
             }
         }
 
-        std::vector<double> depths_m(target_depths_mm.size());
-        for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
-
         auto weight_view = std::span(particles.weight).subspan(start, count);
         auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
 
-        solver.solve(dE_dx, weight_view, t_loss_view, depths_m, params, coeff, all_out_T[i], all_out_times);
+        solver.solve(dE_dx, weight_view, t_loss_view, target_depths, params, coeff, all_out_T[i], all_out_times);
 
         double surf_temp = -1e20;
 

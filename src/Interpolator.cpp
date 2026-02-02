@@ -232,7 +232,7 @@ std::vector<double> Interpolator::getProfile(double energy, double angle, const 
     if (interpolationType == InterpolationType::LINEAR) {
         // 2. Map to targetDepths using Linear
         for (size_t i = 0; i < targetDepths.size(); ++i) {
-            result[i] = interpolate1D(depths_std, prof_std, targetDepths[i]);
+            result[i] = interpolate1D(depths_std, prof_std, targetDepths[i] * 1e3);
         }
     } else {
         // 2. Map to targetDepths using Spline (Akima/Makima)
@@ -240,7 +240,7 @@ std::vector<double> Interpolator::getProfile(double energy, double angle, const 
 
         // Assume sorted targetDepths for efficiency, but using lower_bound is safe and reasonably fast
         for (size_t i = 0; i < targetDepths.size(); ++i) {
-            double xi = targetDepths[i];
+            double xi = targetDepths[i]  * 1e3;
 
             // Handle out of bounds
             if (xi <= depths_std.front()) {
