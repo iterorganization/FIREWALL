@@ -56,26 +56,21 @@ struct SimulationParams {
 
 class Solver {
    public:
-    explicit Solver(const Material& material);
+    explicit Solver(const Material& material, const std::vector<double>& x);
 
     void solve(const std::vector<double>& dE_dx, const std::span<double>& weights,
                const std::span<double>& coll_times, const std::vector<double>& depths, const SimulationParams& params,
                double coeff,
-               std::vector<double>& out_T,      // NOLINT(runtime/references)
-               std::vector<double>& out_times,  // NOLINT(runtime/references)
-               int& out_Nx,                     // NOLINT(runtime/references)
-               int& out_Nt) const;                    // NOLINT(runtime/references)
+               std::vector<std::vector<double>>& out_T,             // NOLINT(runtime/references)
+               std::vector<double>& out_times) const;  // NOLINT(runtime/references)
+               
+    void build_two_region_grid(const std::vector<double>& x);
 
    private:
     Material mat;
 
-    void build_two_region_grid(const std::vector<double>& x,
-                               std::vector<double>& h_face,    // NOLINT(runtime/references)
-                               std::vector<double>& dx_cell) const;  // NOLINT(runtime/references)
 
-    void compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights,
-                        const std::vector<bool>& active_mask, double coeff, int N_x, int N_p,
-                        std::vector<double>& src) const;  // NOLINT(runtime/references)
+    void compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff, std::vector<double>& src) const ;
 
     void assemble_tridiag(const std::vector<double>& T_guess, const std::vector<double>& Tn,
                           const std::vector<double>& rho_cp_nodes, const std::vector<double>& src, double dt,
@@ -88,9 +83,12 @@ class Solver {
     std::vector<double> thomas_solve(const std::vector<double>& a, const std::vector<double>& b,
                                      const std::vector<double>& c, const std::vector<double>& d) const;
 
-    void implicit_step(std::vector<double>& Tn,  // NOLINT(runtime/references)
+    std::vector<double> implicit_step(const std::vector<double>& Tn, // NOLINT(runtime/references)
                        const std::vector<double>& src, double dt, const std::vector<double>& h_face,
                        const std::vector<double>& dx_cell) const;
+
+    std::vector<double> h_face;
+    std::vector<double> dx_cell;
 };
 
 #endif  // INCLUDE_SOLVER_H_

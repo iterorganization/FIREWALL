@@ -81,10 +81,6 @@ int main(int argc, char* argv[]) {
 
     const int N_x1 = static_cast<int>(L_1 / params.delta_x1);
     const int N_x2 = static_cast<int>(L_2 / params.delta_x2);
-    // --- Prepare Interpolator and Material ---
-    Interpolator interpolator(interpPath);
-    Material material;
-    Solver solver(material);
 
     // Extract data for this wall element
     std::vector<double> target_depths(N_x1 + N_x2);
@@ -92,18 +88,18 @@ int main(int argc, char* argv[]) {
     for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
         double spacing;
         if (d < N_x1 - 1)
-            spacing = params.delta_x1;
+        spacing = params.delta_x1;
         else if (d == N_x1 - 1)
-            spacing = 0.5 * (params.delta_x1 + params.delta_x2);
+        spacing = 0.5 * (params.delta_x1 + params.delta_x2);
         else
-            spacing = params.delta_x2;
+        spacing = params.delta_x2;
         target_depths[d + 1] = target_depths[d] + spacing;
     }
-
+    
     std::vector<double> target_depths_mm(N_x1 + N_x2);
     double dx1_mm = params.delta_x1 * 1000.0;
     double dx2_mm = params.delta_x2 * 1000.0;
-
+    
     target_depths_mm[0] = 0.0;
     for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
         double spacing;
@@ -115,26 +111,41 @@ int main(int argc, char* argv[]) {
             spacing = dx2_mm;
         target_depths_mm[d + 1] = target_depths_mm[d] + spacing;
     }
+    
+    const Interpolator interpolator(interpPath);
+    const Solver solver({}, target_depths);
 
     std::vector<double> dE_dx(target_depths_mm.size() * n_particles);
-
+    
     for (size_t j = 0; j < n_particles; ++j) {
         // Interpolate for this particle
         std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths_mm);
-
+        
         for (size_t d = 0; d < prof.size(); ++d)
-            dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeVmm_to_Jm;
+        dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeVmm_to_Jm;
     }
 
-    // Solve Heat Eq
-    std::vector<double> out_T, out_times;
-    int out_Nx, out_Nt;
+    int N_t = 0;
+    int N_x = target_depths_mm.size();
+    
+    if (params.t_interm <= params.t_start || params.t_interm >= params.t_end || params.t_interm == 0.0) {
+        N_t = static_cast<int>(std::ceil((params.t_end - params.t_start) / params.dt_small) + 1);
+        params.t_interm = params.t_end + 1.0;
+    } else {
+        int Nt1 = static_cast<int>(std::ceil((params.t_interm - params.t_start) / params.dt_small));
+        int Nt2 = static_cast<int>(std::ceil((params.t_end - params.t_interm) / params.dt_large));
+        N_t = Nt1 + Nt2 + 1;
+    }
 
-    std::vector<double> depths_m(target_depths_mm.size());
-    for (size_t d = 0; d < depths_m.size(); ++d) depths_m[d] = target_depths_mm[d] * 1e-3;
+    
+    // Solve Heat Eq
+    std::vector<std::vector<double>> out_T(N_t, std::vector<double>(N_x, 0.0));
+    std::vector<double> out_times(N_t, 0.0);
+    for (int xi = 0; xi < N_x; xi++) out_T[0][xi] = params.T_ini;
+    out_times[0] = params.t_start;
 
     const double coeff = 1.0 / (1e-6 * params.t_dep);
-    solver.solve(dE_dx, particles.weight, particles.t_loss, depths_m, params, coeff, out_T, out_times, out_Nx, out_Nt);
+    solver.solve(dE_dx, particles.weight, particles.t_loss, target_depths, params, coeff, out_T, out_times);
 
     // --- Write Results ---
     std::cout << "Writing results to " << outPath << "..." << std::endl;
@@ -142,23 +153,30 @@ int main(int argc, char* argv[]) {
     if (resFile < 0) throw std::runtime_error("Failed to create result file: " + outPath);
 
     // Write datasets out_T (out_Nx, out_Nt) and out_times (out_Nt) and depths_m (out_Nx)
-    hid_t space_T = H5Screate_simple(2, (hsize_t[]){static_cast<hsize_t>(out_Nx), static_cast<hsize_t>(out_Nt)}, NULL);
+    hid_t space_T = H5Screate_simple(2, (hsize_t[]){static_cast<hsize_t>(N_x), static_cast<hsize_t>(N_t)}, NULL);
     hid_t dset_T = H5Dcreate2(resFile, "temperature", H5T_IEEE_F64LE, space_T, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    H5Dwrite(dset_T, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_T.data());
+    std::vector<double> out_T_flat;
+    for (int xi = 0; xi < N_x; ++xi) {
+        for (int ti = 0; ti < N_t; ++ti) {
+            out_T_flat.push_back(out_T[ti][xi]);
+        }
+    }
+    // Flatten out_T for HDF5 writing
+    H5Dwrite(dset_T, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_T_flat.data());
     H5Dclose(dset_T);
-    H5Sclose(space_T);  
+    H5Sclose(space_T);
 
-    hsize_t dims_times[1] = {static_cast<hsize_t>(out_Nt)};
+    hsize_t dims_times[1] = {static_cast<hsize_t>(N_t)};
     hid_t space_times = H5Screate_simple(1, dims_times, NULL);
     hid_t dset_times = H5Dcreate2(resFile, "times", H5T_IEEE_F64LE, space_times, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(dset_times, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_times.data());
     H5Dclose(dset_times);
     H5Sclose(space_times);
 
-    hsize_t dims_depths[1] = {static_cast<hsize_t>(out_Nx)};
+    hsize_t dims_depths[1] = {static_cast<hsize_t>(N_x)};
     hid_t space_depths = H5Screate_simple(1, dims_depths, NULL);
     hid_t dset_depths = H5Dcreate2(resFile, "depths", H5T_IEEE_F64LE, space_depths, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    H5Dwrite(dset_depths, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, depths_m.data());
+    H5Dwrite(dset_depths, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, target_depths.data());
     H5Dclose(dset_depths);
     H5Sclose(space_depths);
 

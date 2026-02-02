@@ -13,7 +13,7 @@
 /**
  * Constructor.
  */
-Solver::Solver(const Material& material) : mat(material) {}
+Solver::Solver(const Material& material, const std::vector<double>& x) : mat(material) { build_two_region_grid(x); }
 
 /**
  * Build the vectors of inter-node distances and cell volumes.
@@ -22,7 +22,7 @@ Solver::Solver(const Material& material) : mat(material) {}
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<double>& h_face, std::vector<double>& dx_cell) const {
+void Solver::build_two_region_grid(const std::vector<double>& x) {
     size_t N = x.size();
     if (N > 1) {
         h_face.resize(N - 1);
@@ -59,18 +59,16 @@ void Solver::build_two_region_grid(const std::vector<double>& x, std::vector<dou
  * N_x:         Number of nodes in the in depth grid. N_p:         Number of
  * macroparticles. src:         Source term.
  */
-void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff,
-                            int N_x, int N_p, std::vector<double>& src) const {
-    src.assign(N_x, 0.0);
+void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::vector<bool>& active_mask, double coeff, std::vector<double>& src) const {
 
 // Parallelize over spatial grid
 #pragma omp parallel for
-    for (int i = 0; i < N_x; ++i) {
+    for (int i = 0; i < src.size(); ++i) {
         double s = 0.0;
 
-        for (int j = 0; j < N_p; ++j) {
+        for (int j = 0; j < active_mask.size(); ++j) {
             if (active_mask[j]) {
-                s += dE_dx[i * N_p + j] * weights[j];
+                s += dE_dx[i * active_mask.size() + j] * weights[j];
             }
         }
         src[i] = coeff * s;
@@ -211,7 +209,7 @@ std::vector<double> Solver::thomas_solve(const std::vector<double>& a, const std
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */
-void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& src, double dt, const std::vector<double>& h_face,
+std::vector<double> Solver::implicit_step(const std::vector<double>& Tn, const std::vector<double>& src, double dt, const std::vector<double>& h_face,
                            const std::vector<double>& dx_cell) const {
     size_t N = Tn.size();
     std::vector<double> T_guess = Tn;  // Copy
@@ -251,7 +249,7 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
         std::cerr << "Warning: implicit_step did not converge in " << max_iter << " iterations. maxdiff=" << maxdiff << std::endl;
     }
 
-    Tn = T_guess;
+    return T_guess;
 }
 
 /**
@@ -269,75 +267,41 @@ void Solver::implicit_step(std::vector<double>& Tn, const std::vector<double>& s
  * evaluated.
  */
 void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& weights, const std::span<double>& coll_times,
-                   const std::vector<double>& depths, const SimulationParams& params, double coeff, std::vector<double>& out_T, std::vector<double>& out_times,
-                   int& out_Nx, int& out_Nt) const {
-    double dt_small = params.dt_small;
-    double dt_large = params.dt_large;
-    double t_start = params.t_start;
-    double t_end = params.t_end;
-    double t_interm = params.t_interm;
-
-    double dt = dt_small;
-    int N_t = 0;
-
-    if (t_interm <= t_start || t_interm >= t_end || t_interm == 0.0) {
-        N_t = static_cast<int>(std::ceil((t_end - t_start) / dt)) + 1;
-        t_interm = t_end + 1.0;
-    } else {
-        int Nt1 = static_cast<int>(std::ceil((t_interm - t_start) / dt_small));
-        int Nt2 = static_cast<int>(std::ceil((t_end - t_interm) / dt_large));
-        N_t = Nt1 + Nt2 + 1;
-    }
+                   const std::vector<double>& depths, const SimulationParams& params, double coeff, std::vector<std::vector<double>>& out_T, std::vector<double>& out_times) const {
+    double t_now = params.t_start;
+    double dt;
+    int n = 1;
 
     int N_p = coll_times.size();
     int N_x = depths.size();
 
-    std::vector<double> h_face, dx_cell;
-    build_two_region_grid(depths, h_face, dx_cell);
-
-    std::vector<double> T(N_x, params.T_ini);
-    std::vector<double> Tn(N_x);
-
-    // Output allocation
-    out_Nx = N_x;
-    out_Nt = N_t;
-    out_T.resize(N_x * N_t);
-    out_times.resize(N_t);
-
-    // Save T[:, 0]
-    for (int i = 0; i < N_x; ++i) out_T[i] = T[i];
-
-    // Save t=0
-    for (int i = 0; i < N_x; ++i) out_T[i * N_t + 0] = T[i];
-    out_times[0] = t_start;
-
-    double t_now = t_start;
-    int n = 1;
-
     std::vector<bool> active_mask(N_p);
     std::vector<double> src(N_x);
 
-    while (n < N_t) {
-        if (t_now >= t_interm)
-            dt = dt_large;
-        else
-            dt = dt_small;
+    // Initial condition
+    // std::vector<double> T(N_x, params.T_ini);
 
-        t_now += dt;
-        Tn = T;  // Copy T to Tn
-
+    while (n < out_times.size()) {
+        
+        
         // Active mask
         for (int j = 0; j < N_p; ++j) {
             active_mask[j] = (coll_times[j] <= t_now) && (t_now <= (coll_times[j] + params.t_dep));
         }
+        
+        compute_source(dE_dx, weights, active_mask, coeff, src);
+        
+        out_T[n] = implicit_step(out_T[n-1], src, dt, h_face, dx_cell);
+        
+        if (t_now >= params.t_interm)
+            dt = params.dt_large;
+        else
+            dt = params.dt_small;
+            
+        t_now += dt;
 
-        compute_source(dE_dx, weights, active_mask, coeff, N_x, N_p, src);
-
-        implicit_step(T, src, dt, h_face, dx_cell);
-        // Store
-        for (int i = 0; i < N_x; ++i) out_T[i * N_t + n] = T[i];
         out_times[n] = t_now;
-
+        
         n++;
     }
 }
