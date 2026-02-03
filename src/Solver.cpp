@@ -18,7 +18,7 @@ Solver::Solver(const Material& material, const std::vector<double>& x) : mat(mat
 /**
  * Build the vectors of inter-node distances and cell volumes.
  *
- * x:       In depth grid.
+ * depths:  In depth grid.
  * h_face:  Vector containing inter-node distances.
  * dx_cell: Vector containing the volumes around each node.
  */

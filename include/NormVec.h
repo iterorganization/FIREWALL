@@ -3,12 +3,31 @@
 
 #include <cmath>
 
+/**
+ * @brief Represents a normalized 3D vector.
+ *
+ * Typically used to represent surface normals.
+ */
 struct NormVec {
-    double x, y, z, len;
+    double x;   ///< X component of the vector.
+    double y;   ///< Y component of the vector.
+    double z;   ///< Z component of the vector.
+    double len; ///< Length of the vector before normalization.
 
+    /**
+     * @brief Default constructor. Initializes vector to zero.
+     */
     NormVec() : x(0), y(0), z(0), len(0) {}
 
-    // Add 'inline' to suggest the compiler paste this code directly into the caller
+    /**
+     * @brief Constructs a normal vector from a triangle's vertices.
+     *
+     * Calculates the normal vector of the triangle defined by vertices
+     * starting at the given offset in the wall array. The vector is normalized.
+     *
+     * @param wall Pointer to the array containing vertex coordinates.
+     * @param offset Offset in the wall array where the triangle's vertices start.
+     */
     inline NormVec(const double* wall, int offset) {
         // 1. Point directly to the data. 
         // This creates no new arrays, just looks at existing memory.

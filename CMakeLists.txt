@@ -56,8 +56,8 @@ endif()
 # -----------------------------------------------------------------------------
 
 # 1. Main Simulation Executable
-add_executable(heat_sim src/main.cpp)
-target_link_libraries(heat_sim PRIVATE core_lib)
+add_executable(firewall src/main.cpp)
+target_link_libraries(firewall PRIVATE core_lib)
 
 # 2. Benching Executable
 add_executable(benching tests/bench.cpp)

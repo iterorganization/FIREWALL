@@ -9,3 +9,6 @@ build/**
 tests/data/**
 tests/J2_data.zip
 tests/results/results.h5
+
+# Documentation
+docs/
