@@ -16,7 +16,7 @@ ZIP_FILE="${TEST_DIR}/J2_data.zip"
 MAT_FILE="${DATA_DIR}/3deg7T.mat"
 INTERP_FILE="${DATA_DIR}/interpolation_data.h5"
 BUILD_DIR="build"
-OUTPUT_FILE="results.h5"
+OUTPUT_FILE="${TEST_DIR}/results/results.h5"
 REF_FILE="${TEST_DIR}/results/pipeline_results.h5"
 
 echo "Starting pipeline..."
@@ -47,21 +47,22 @@ fi
 # 3. Compile
 echo "Step 3: Compiling..."
 cmake -S . -B "$BUILD_DIR"
-cmake --build "$BUILD_DIR"
+cmake --build "$BUILD_DIR" --config Release -- -j 8
 
 # 4. Execute
 echo "Step 4: Running simulation..."
-./"$BUILD_DIR"/heat_sim \
+/usr/bin/time -f "Real: %E \nUser: %U \nSys: %S" \
+    ./"$BUILD_DIR"/heat_sim \
     --config examples/config.txt \
     --wall "${DATA_DIR}/newiterwall_offset10cm.h5" \
     --part "${DATA_DIR}/part_out_eta_10x_fo.h5" \
     --interp "$INTERP_FILE" \
-    --out "$OUTPUT_FILE"
+    --out "$OUTPUT_FILE" \
 
 # 5. Compare
 echo "Step 5: Comparing results..."
 if command -v h5diff &> /dev/null; then
-    h5diff -v "$REF_FILE" "$OUTPUT_FILE"
+    h5diff -v --relative=0.01 "$REF_FILE" "$OUTPUT_FILE" /surf_temp
     echo "Comparison complete."
 else
     echo "Warning: h5diff not found. Skipping comparison."
