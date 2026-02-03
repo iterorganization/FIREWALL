@@ -11,4 +11,5 @@ tests/J2_data.zip
 tests/results/results.h5
 
 # Documentation
-docs/
+docs/html/
+docs/latex/
