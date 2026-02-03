@@ -1,11 +1,19 @@
 #!/bin/bash
 set -e
 
+# Get the directory where this script is actually saved
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+
+# Change to that directory
+cd "$SCRIPT_DIR/.."
+
+echo "Running from: $(pwd)"
+
 # Define paths
 TEST_DIR="tests"
 DATA_DIR="${TEST_DIR}/data"
 ZIP_FILE="${TEST_DIR}/J2_data.zip"
-MAT_FILE="${DATA_DIR}/t_in_depth_results_1MeV.mat"
+MAT_FILE="${DATA_DIR}/3deg7T.mat"
 INTERP_FILE="${DATA_DIR}/interpolation_data.h5"
 BUILD_DIR="build"
 OUTPUT_FILE="results.h5"
