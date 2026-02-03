@@ -3,3 +3,4 @@ results/**
 build/**
 *.sh
 .vscode/**
+!tests/run_pipeline.sh

@@ -2,15 +2,12 @@ import numpy as np
 import scipy.io
 import h5py
 import os
+import sys
 
-def convert_mat_to_h5():
-    mat_path = '../build/data/3deg7T.mat'
-    h5_path = '../build/data/interpolation_data.h5'
-
+def convert_mat_to_h5(mat_path, h5_path):
     if not os.path.exists(mat_path):
-        if not os.path.exists(mat_path):
-             print(f"Error: Could not find {mat_path}")
-             return
+        print(f"Error: Could not find {mat_path}")
+        return
 
     print(f"Reading {mat_path}...")
     data = scipy.io.loadmat(mat_path)
@@ -48,4 +45,10 @@ def convert_mat_to_h5():
     print("Conversion complete.")
 
 if __name__ == "__main__":
-    convert_mat_to_h5()
+    if len(sys.argv) != 3:
+        print("Usage: python prepare_data.py <mat_path> <h5_path>")
+        sys.exit(1)
+    
+    mat_path = sys.argv[1]
+    h5_path = sys.argv[2]
+    convert_mat_to_h5(mat_path, h5_path)
