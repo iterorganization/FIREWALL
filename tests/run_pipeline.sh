@@ -52,7 +52,7 @@ cmake --build "$BUILD_DIR" --config Release -- -j 8
 # 4. Execute
 echo "Step 4: Running simulation..."
 /usr/bin/time -f "Real: %E \nUser: %U \nSys: %S" \
-    ./"$BUILD_DIR"/heat_sim \
+    ./"$BUILD_DIR"/firewall \
     --config examples/config.txt \
     --wall "${DATA_DIR}/newiterwall_offset10cm.h5" \
     --part "${DATA_DIR}/part_out_eta_10x_fo.h5" \
