@@ -10,6 +10,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Find Dependencies
 # HDF5 often requires C language enabled to find the C component correctly
+find_package(MPI REQUIRED)
 find_package(HDF5 REQUIRED COMPONENTS C)
 find_package(OpenMP)
 
@@ -50,6 +51,8 @@ if(OpenMP_CXX_FOUND)
     message(STATUS "OpenMP found, enabling parallel execution.")
     target_link_libraries(core_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
+
+target_link_libraries(core_lib PUBLIC MPI::MPI_CXX)
 
 # -----------------------------------------------------------------------------
 # Executables
