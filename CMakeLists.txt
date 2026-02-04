@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.20)
 # Declare project
 project(HeatSimulation LANGUAGES CXX C)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 # -----------------------------------------------------------------------------
 # Configuration
 # -----------------------------------------------------------------------------
@@ -28,7 +32,7 @@ add_library(core_lib STATIC
 )
 
 # Set C++ Standard specifically for this target
-target_compile_features(core_lib PUBLIC cxx_std_20)
+target_compile_features(core_lib PUBLIC cxx_std_23)
 
 # Include directories
 # PUBLIC = accessible to core_lib AND anything that links to it
