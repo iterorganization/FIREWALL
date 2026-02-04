@@ -3,6 +3,7 @@
 #include <vector>
 #include <stdexcept>
 #include <sstream>
+#include <fstream>
 
 // Default paths
 constexpr char DEFAULT_CONFIG[] = "../examples/config.txt";
@@ -125,19 +126,42 @@ ArgParser::Args ArgParser::parse(int argc, char* argv[]) {
         } else if (arg == "--walls") {
             if (i + 1 < argc) {
                 std::string val = argv[++i];
-                std::stringstream ss(val);
+                std::string content;
+
+                // Check if the argument is a file path
+                std::ifstream file(val);
+                if (file.is_open()) {
+                    // Read entire file content into a string, 
+                    // replacing newlines/spaces with commas for uniform parsing
+                    std::string line;
+                    while (std::getline(file, line)) {
+                        content += line + ",";
+                    }
+                    file.close();
+                } else {
+                    // Not a file, assume it's a raw comma-separated string
+                    content = val;
+                }
+
+                // Parse the resulting string (comma or space separated)
+                std::stringstream ss(content);
                 std::string segment;
+                // Use a delimiter set that handles commas, spaces, or tabs
                 while (std::getline(ss, segment, ',')) {
+                    // Trim whitespace and handle empty segments
+                    segment.erase(0, segment.find_first_not_of(" \t\r\n"));
+                    segment.erase(segment.find_last_not_of(" \t\r\n") + 1);
+                    
                     if (!segment.empty()) {
                         try {
                             args.wallIds.push_back(std::stoi(segment));
                         } catch (...) {
-                            throw std::runtime_error("Error: Invalid wall ID in list: " + segment);
+                            throw std::runtime_error("Error: Invalid wall ID: '" + segment + "'");
                         }
                     }
                 }
             } else {
-                throw std::runtime_error("Error: --walls requires a comma-separated list of IDs.");
+                throw std::runtime_error("Error: --walls requires a list or a file path.");
             }
         } else if (arg == "--help" || arg == "-h") {
             args.help = true;

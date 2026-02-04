@@ -62,3 +62,7 @@ target_link_libraries(heat_sim PRIVATE core_lib)
 # 2. Benching Executable
 add_executable(benching tests/bench.cpp)
 target_link_libraries(benching PRIVATE core_lib)
+
+# 3. Benching workflow Executable
+add_executable(benching_workflow tests/bench_workflow.cpp)
+target_link_libraries(benching_workflow PRIVATE core_lib)
