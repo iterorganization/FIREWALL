@@ -9,7 +9,13 @@
 #include "Utils.h"
 #include "PhysConst.h"
 
-// --- Helper to physically reorder vectors ---
+/**
+ * @brief Reorders a vector based on a permutation index.
+ *
+ * @tparam T Type of the vector elements.
+ * @param data The vector to be reordered.
+ * @param p_indices The permutation indices.
+ */
 template <typename T>
 void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indices) {
     if (data.size() != p_indices.size()) return; // Safety check
@@ -22,21 +28,53 @@ void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indice
     data.swap(sorted_data);
 }
 
+/**
+ * @brief Base class for particle data used in benchmarks.
+ *
+ * Stores basic particle properties like loss time, weight, energy, and angle.
+ */
 class BenchParticles {
     public:
-    std::vector<double> t_loss;
-    std::vector<double> weight;
-    std::vector<double> energy, angle;
-    int n_particles;
+    std::vector<double> t_loss; ///< Time of particle loss.
+    std::vector<double> weight; ///< Particle weight.
+    std::vector<double> energy; ///< Particle energy.
+    std::vector<double> angle;  ///< Particle angle of incidence.
+    int n_particles;            ///< Total number of particles.
+
+    /**
+     * @brief Constructs BenchParticles with a given size.
+     * @param n Number of particles.
+     */
     BenchParticles (size_t n) : t_loss(n), weight(n), energy(n), angle(n), n_particles(n) {}
+
+    /**
+     * @brief Default constructor.
+     */
     BenchParticles () {}
 };
 
+/**
+ * @brief Class for particle data loaded from HDF5 files.
+ *
+ * Extends BenchParticles to include wall IDs and velocity components.
+ * Loads and processes particle data from a specified HDF5 file.
+ */
 class Particles : public BenchParticles {
     public:
-    std::vector<int> wall_id;
-    std::vector<double> vx, vy, vz;
+    std::vector<int> wall_id;    ///< ID of the wall element where the particle hit.
+    std::vector<double> vx;      ///< Velocity X component.
+    std::vector<double> vy;      ///< Velocity Y component.
+    std::vector<double> vz;      ///< Velocity Z component.
     
+    /**
+     * @brief Constructs Particles object and loads data from HDF5 file.
+     *
+     * Loads particle data, calculates energy, sorts by wall ID and loss time,
+     * and filters out invalid particles.
+     *
+     * @param partPath Path to the HDF5 particles file.
+     * @throws std::runtime_error If file opening or group access fails.
+     */
     Particles (std::string partPath){
         hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
         if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
@@ -126,6 +164,11 @@ class Particles : public BenchParticles {
         energy = std::vector<double>(energy.begin() + start_offset, energy.begin() + end_offset);
     }
 
+    /**
+     * @brief Retrieves a list of unique wall IDs present in the particle data.
+     *
+     * @return std::vector<int> A vector containing unique wall IDs.
+     */
     std::vector<int> get_unique_wall_ids () {
         // --- Identify Unique IDs ---
         std::vector<int> unique_wall_ids;
