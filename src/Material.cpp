@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 
+constexpr double unphysical_value_T = 1e4;
+
 /**
  * Constructor.
  */
@@ -18,7 +20,7 @@ Material::Material() {}
  * T : Temperature at which thermal conductivity is evaluated.
  */
 double Material::getK(double T) const {
-    // T = std::max(T, 300.0);
+    T = std::max(300.0, std::min(T, unphysical_value_T));
     double Tm = 3695.0;
     if (299 <= T && T <= Tm) {
         return 149.441 + (3.866e6) / (T * T) - (45.466e-3) * T + (13.193e-6) * (T * T) - (1.484e-9) * T * T * T;
@@ -38,7 +40,7 @@ double Material::getK(double T) const {
  * T : Temperature at which mass density is evaluated.
  */
 double Material::getRho(double T) const {
-    // T = std::max(T, 293.15);
+    T = std::max(300.0, std::min(T, unphysical_value_T));
     const double conv = 1000.0;
     const double T0 = 293.15;
     const double Tm = 3695.0;
@@ -61,7 +63,7 @@ double Material::getRho(double T) const {
  * T : Temperature at which heat capacity is evaluated.
  */
 double Material::getCp(double T) const {
-    // T = std::max(T, 300.0);
+    T = std::max(300.0, std::min(T, unphysical_value_T));
     const double conv = 1000.0 / 183.84;
 
     if (299 <= T && T <= 3080.0) {
