@@ -4,6 +4,8 @@ This repository contains the Fast Integrated Runaway Electron WALL loads (FIREWA
 
 **FIREWALL** is a surrogate model that enables a quick assessment of volumetric wall heating by runaway electrons, taking into account the energy and incidence angles of the incoming particles and realistic 3D wall geometry. Specifically, FIREWALL solves multiple time-dependent 1D heat diffusion equationsfor every mesh triangle in a realitic tokamak 3D wall geometry employing a Finite Volume Method with an implicit time integration scheme to handle the non-linear material properties and stiff source terms efficiently. FIREWALL can be coupled to the JOREK code or other runaway electron modelling codes.
 
+The official FIREWALL paper is TO BE ADDED.
+
 ## Key Features
 
 *   **Non-linear Material Properties**: Accurate modelling of Tungsten (W) properties (thermal conductivity, specific heat, density) as functions of temperature.
