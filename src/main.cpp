@@ -72,7 +72,7 @@ std::vector<double> construct_target_depths(const SimulationParams& params) {
 
 struct Result {
     int wall_id;
-    double surf_temp;
+    std::vector<double> surf_temp;
 };
 
 int main(int argc, char* argv[]) {
@@ -203,14 +203,12 @@ int main(int argc, char* argv[]) {
 
         solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, out_T);
 
-        double surf_temp = -1e20;
+        results[i].surf_temp.resize(times.size());
 
-        // TODO ask about this logic to Victor
         for (size_t tstep = 0; tstep < times.size(); ++tstep)
-            surf_temp = std::max(surf_temp, out_T[tstep][0]);
+            results[i].surf_temp[tstep] = out_T[tstep][0];
 
         results[i].wall_id = wid;
-        results[i].surf_temp = surf_temp;
     }
 
     // --- Write Results ---
@@ -219,27 +217,38 @@ int main(int argc, char* argv[]) {
     if (resFile < 0) throw std::runtime_error("Failed to create result file");
 
     std::vector<double> wall_ids_out(selected_wall_ids.size());
-    std::vector<double> surf_temps_out(selected_wall_ids.size());
+    std::vector<double> surf_temps_out(selected_wall_ids.size() * times.size());
 
     for (int i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
-        surf_temps_out[i] = results[i].surf_temp;
+        for (size_t t = 0; t < times.size(); ++t) {
+            surf_temps_out[i * times.size() + t] = results[i].surf_temp[t];
+        }
     }
 
     // Write datasets
-    hsize_t dims1[1] = {(hsize_t)selected_wall_ids.size()};
-    hid_t space1 = H5Screate_simple(1, dims1, NULL);
+    hsize_t dims_wid[1] = {(hsize_t)selected_wall_ids.size()};
+    hsize_t dims_temp[2] = {(hsize_t)selected_wall_ids.size(), (hsize_t)times.size()};
+    hsize_t dims_time[1] = {(hsize_t)times.size()};
+    hid_t space1 = H5Screate_simple(1, dims_wid, NULL);
+    hid_t space2 = H5Screate_simple(2, dims_temp, NULL);
+    hid_t space3 = H5Screate_simple(1, dims_time, NULL);
 
     hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
     H5Dclose(ds1);
 
-    hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds2, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, surf_temps_out.data());
     H5Dclose(ds2);
 
-    H5Sclose(space1);
+    hid_t ds3 = H5Dcreate2(resFile, "times", H5T_NATIVE_DOUBLE, space3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, times.data());
+    H5Dclose(ds3);
 
+    H5Sclose(space1);
+    H5Sclose(space2);
+    H5Sclose(space3);
     H5Fclose(resFile);
 
     std::cout << "Done." << std::endl;
