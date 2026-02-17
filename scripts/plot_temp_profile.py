@@ -95,11 +95,11 @@ def plot_snapshots(ids, time_val, depths, profiles, split=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--results_file", required=True)
+    parser.add_argument("--results_file", required=True, help="Path to HDF5 file containing full in-depth temperature profiles for selected wall IDs")
     parser.add_argument("--wall_ids", help="Comma-separated IDs or .txt file")
-    parser.add_argument("--time_idx", type=int, default=0)
-    parser.add_argument("--live", action="store_true")
-    parser.add_argument("--split", action="store_true")
+    parser.add_argument("--time_idx", type=int, default=0, help="Time index to plot for static snapshot (ignored if --live is set)")
+    parser.add_argument("--live", action="store_true", help="Animate temperature profiles over time")
+    parser.add_argument("--split", action="store_true", help="Create separate subplots for each Wall ID instead of overlaying, can be used with --live or static")
     args = parser.parse_args()
 
     # --- ID Parsing ---

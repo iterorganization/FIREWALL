@@ -126,10 +126,10 @@ def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--wall_file")
-    parser.add_argument("--results_files")
-    parser.add_argument("--option", choices=["last_time", "max_temperature", "first_melt", "binary"], default="last_time")
-    parser.add_argument("--phi_cam", type=lambda x: float(eval(x, {"np": np, "pi": np.pi})))
+    parser.add_argument("--wall_file", help = "Path to wall geometry HDF5 file", required=True)
+    parser.add_argument("--results_files", help = "Path to results HDF5 file", required=True)
+    parser.add_argument("--option", choices=["last_time", "max_temperature", "first_melt", "binary"], default="last_time", help="Plotting option: 'last_time' for final step, 'max_temperature' for max temperatures reached over simulation, 'first_melt' for first time step where any cell > 3695K, 'binary' for melt/no-melt")
+    parser.add_argument("--phi_cam", type=lambda x: float(eval(x, {"np": np, "pi": np.pi})), default=0.0, help="Camera angle in radians (e.g., 0, 10*np.pi/180)")
     parser.add_argument("--live", action="store_true", help="Animate temperature over time")
     args = parser.parse_args()
 
