@@ -31,7 +31,6 @@ Additionally, to use the post-processing Python scripts, you need the following 
 ## Compilation
 
 To compile FIREWALL, go to the root FIREWALL directory and run the following commands:
-### S
 
 ```bash
 mkdir build
