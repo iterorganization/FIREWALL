@@ -79,6 +79,7 @@ void ArgParser::printUsage(const char* progName) {
               << "  --interp <path>    Path to interpolation data HDF5 file (default: " << DEFAULT_INTERP << ")\n"
               << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
               << "  --walls <list>     Comma-separated list of wall IDs to process (default: all)\n"
+              << "  --full_profile_walls <list>     Comma-separated list of wall IDs to store full profiles for (default: none)\n"
               << "  --help, -h         Show this help message\n";
 }
 
@@ -155,6 +156,46 @@ ArgParser::Args ArgParser::parse(int argc, char* argv[]) {
                     if (!segment.empty()) {
                         try {
                             args.wallIds.push_back(std::stoi(segment));
+                        } catch (...) {
+                            throw std::runtime_error("Error: Invalid wall ID: '" + segment + "'");
+                        }
+                    }
+                }
+            } else {
+                throw std::runtime_error("Error: --walls requires a list or a file path.");
+            }
+        } else if (arg == "--full_profile_walls"){
+            if (i + 1 < argc) {
+                std::string val = argv[++i];
+                std::string content;
+
+                // Check if the argument is a file path
+                std::ifstream file(val);
+                if (file.is_open()) {
+                    // Read entire file content into a string,
+                    // replacing newlines/spaces with commas for uniform parsing
+                    std::string line;
+                    while (std::getline(file, line)) {
+                        content += line + ",";
+                    }
+                    file.close();
+                } else {
+                    // Not a file, assume it's a raw comma-separated string
+                    content = val;
+                }
+
+                // Parse the resulting string (comma or space separated)
+                std::stringstream ss(content);
+                std::string segment;
+                // Use a delimiter set that handles commas, spaces, or tabs
+                while (std::getline(ss, segment, ',')) {
+                    // Trim whitespace and handle empty segments
+                    segment.erase(0, segment.find_first_not_of(" \t\r\n"));
+                    segment.erase(segment.find_last_not_of(" \t\r\n") + 1);
+
+                    if (!segment.empty()) {
+                        try {
+                            args.fullProfileWallIds.push_back(std::stoi(segment));
                         } catch (...) {
                             throw std::runtime_error("Error: Invalid wall ID: '" + segment + "'");
                         }

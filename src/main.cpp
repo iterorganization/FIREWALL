@@ -73,6 +73,8 @@ std::vector<double> construct_target_depths(const SimulationParams& params) {
 struct Result {
     int wall_id;
     std::vector<double> surf_temp;
+    std::vector<std::vector<double>> full_profile;
+    bool store_full = false;
 };
 
 int main(int argc, char* argv[]) {
@@ -95,6 +97,16 @@ int main(int argc, char* argv[]) {
         std::cout << "  Walls:       ";
         for (size_t i = 0; i < args.wallIds.size(); ++i) {
             std::cout << args.wallIds[i] << (i < args.wallIds.size() - 1 ? ", " : "");
+        }
+        std::cout << "\n";
+    }
+
+    if (args.fullProfileWallIds.empty()) {
+        std::cout << "  Full Profile Walls:       None\n";
+    } else {
+        std::cout << "  Full Profile Walls:       ";
+        for (size_t i = 0; i < args.fullProfileWallIds.size(); ++i) {
+            std::cout << args.fullProfileWallIds[i] << (i < args.fullProfileWallIds.size() - 1 ? ", " : "");
         }
         std::cout << "\n";
     }
@@ -133,7 +145,17 @@ int main(int argc, char* argv[]) {
         
         if (selected_wall_ids.empty()) std::cerr << "Warning: None of the requested wall IDs were found.\n";
     }
-    
+
+    std::vector<int> selected_full_profile_wall_ids;
+
+    if (args.fullProfileWallIds.empty()) {
+        selected_full_profile_wall_ids = {};
+    } else {
+        std::copy_if(unique_wall_ids.begin(), unique_wall_ids.end(), std::back_inserter(selected_full_profile_wall_ids),
+                     [&](int id) { return std::find(args.fullProfileWallIds.begin(), args.fullProfileWallIds.end(), id) != args.fullProfileWallIds.end(); });
+    }
+
+
     std::cout << "Processing " << selected_wall_ids.size() << " elements using OpenMP..." << std::endl;
     std::cout << "Max threads: " << omp_get_max_threads() << std::endl;
         
@@ -150,7 +172,9 @@ int main(int argc, char* argv[]) {
     const Interpolator interpolator(args.interpPath);
     const Solver solver({}, target_depths);  // Empty material for now.
     std::vector<Result> results(selected_wall_ids.size());
-    
+
+
+
     // --- Parallel Loop ---
     #pragma omp parallel for schedule(dynamic)
     for (int i = 0; i < selected_wall_ids.size(); ++i) {
@@ -164,6 +188,10 @@ int main(int argc, char* argv[]) {
         const size_t start = ranges[i].first;
         const size_t end = ranges[i].second;
         const size_t count = end - start;
+
+        bool keep_full = std::find(selected_full_profile_wall_ids.begin(),
+                                   selected_full_profile_wall_ids.end(),
+                                   wid) != selected_full_profile_wall_ids.end();
 
         // Offset check was here but NormVec is computed outside now. 
         // We can check validity of wid still if needed, but NormVec construction likely assumed valid.
@@ -208,6 +236,11 @@ int main(int argc, char* argv[]) {
         for (size_t tstep = 0; tstep < times.size(); ++tstep)
             results[i].surf_temp[tstep] = out_T[tstep][0];
 
+        if (keep_full) {
+            results[i].store_full = true;
+            results[i].full_profile = std::move(out_T);  // Move the whole 2D grid
+        }
+
         results[i].wall_id = wid;
     }
 
@@ -226,13 +259,44 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    hid_t group = H5Gcreate2(resFile, "full_profiles", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+    hsize_t dims_2d[2] = {times.size(), target_depths.size()};
+
+    for (const auto& res : results) {
+        if (res.store_full) {
+            // Flatten the 2D vector [time][depth] into a contiguous buffer for HDF5
+            std::vector<double> flat_buf(times.size() * target_depths.size());
+            for (size_t t = 0; t < times.size(); ++t) {
+                for (size_t d = 0; d < target_depths.size(); ++d) {
+                    flat_buf[t * target_depths.size() + d] = res.full_profile[t][d];
+                }
+            }
+
+            // Use the wall ID as the dataset name
+            std::string ds_name = std::to_string(res.wall_id);
+            
+            hid_t space_2d = H5Screate_simple(2, dims_2d, NULL);
+            hid_t dataset = H5Dcreate2(group, ds_name.c_str(), H5T_NATIVE_DOUBLE, space_2d, 
+                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+            
+            H5Dwrite(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, flat_buf.data());
+            
+            H5Dclose(dataset);
+            H5Sclose(space_2d);
+        }
+    }
+
+
     // Write datasets
     hsize_t dims_wid[1] = {(hsize_t)selected_wall_ids.size()};
     hsize_t dims_temp[2] = {(hsize_t)selected_wall_ids.size(), (hsize_t)times.size()};
     hsize_t dims_time[1] = {(hsize_t)times.size()};
+    hsize_t dims_depth[1] = {(hsize_t)target_depths.size()};
     hid_t space1 = H5Screate_simple(1, dims_wid, NULL);
     hid_t space2 = H5Screate_simple(2, dims_temp, NULL);
     hid_t space3 = H5Screate_simple(1, dims_time, NULL);
+    hid_t space4 = H5Screate_simple(1, dims_depth, NULL);
 
     hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
@@ -246,13 +310,18 @@ int main(int argc, char* argv[]) {
     H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, times.data());
     H5Dclose(ds3);
 
+    hid_t ds4 = H5Dcreate2(group, "depths", H5T_NATIVE_DOUBLE, space4, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(ds4, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, target_depths.data());
+    H5Dclose(ds4);
+
     H5Sclose(space1);
     H5Sclose(space2);
     H5Sclose(space3);
+    H5Sclose(space4);
+    H5Gclose(group);
     H5Fclose(resFile);
 
     std::cout << "Done." << std::endl;
-
 
     return 0;
 }
