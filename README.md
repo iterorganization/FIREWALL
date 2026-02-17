@@ -66,6 +66,7 @@ In the command line, add the following arguments:
 ./firewall --config my_config.txt --wall geometry.h5 --part particles.h5 --out run1_results.h5
 ```
 
+The post-processing Python scripts are run via the command line in a similar way.
 ## Documentation
 
 Full API documentation is available in the `docs/html` directory. Open `index.html` in your browser to view it.
