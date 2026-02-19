@@ -1,0 +1,12 @@
+# Simulation Parameters
+T_ini: 300
+dt_small: 1e-7
+dt_large: 1e-3
+t_dep: 1e-6
+t_start: 0.05116
+t_end: 0.0514
+t_interm: 0.0
+L: 24e-3
+L_sub: 10.0
+delta_x1: 1.5e-6
+delta_x2: 1.5e-4

@@ -4,7 +4,7 @@ dt_small: 1e-7
 dt_large: 1e-3
 t_dep: 1e-3
 t_start: 0.0
-t_end: 2.7e-4
+t_end: 1e-3
 t_interm: 0.0
 L: 24e-3
 L_sub: 30.0
