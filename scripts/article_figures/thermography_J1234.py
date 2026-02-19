@@ -18,7 +18,7 @@ plt.rcParams.update({
 
 # Fixed Parameters
 R0, Z0 = 5.2, 0.1
-VMIN, VMAX_DEFAULT = 301, 1500 # Adjust VMAX_DEFAULT as needed
+VMIN = 301
 
 def read_wallinput(wallin):
     if not os.path.exists(wallin):
@@ -76,7 +76,7 @@ def plot_3d_subplot(ax, mesh, r0, z0, phicam, title, vmin, vmax, option):
         temps = m_plot.cell_data['temps'].copy()
         temps[temps <= vmin] = np.nan
         m_plot.cell_data['plot_scalars'] = temps
-        p.add_mesh(m_plot, scalars='plot_scalars', cmap='jet', 
+        p.add_mesh(m_plot, scalars='plot_scalars', cmap='turbo', 
                    clim=[vmin, vmax], log_scale=True, show_scalar_bar=False, nan_color='lightgrey')
 
     p.camera.position = (1.9*r0*np.cos(phicam), 1.9*r0*np.sin(phicam), z0 - 1)
@@ -92,25 +92,34 @@ def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
     centers = mesh.cell_centers().points
     phi_deg = np.rad2deg(np.arctan2(centers[:, 1], centers[:, 0])) % 360
     z = centers[:, 2]
+    temps = mesh.cell_data['temps']
+
+    # 1. Use a 'max' reduction instead of a sum/average
+    # This ensures if ONE cell in the bin is hot, the whole bin shows hot.
+    from scipy.stats import binned_statistic_2d
     
-    counts, xedges, yedges = np.histogram2d(phi_deg, z, bins=(180, 90))
-    temp_sum, _, _ = np.histogram2d(phi_deg, z, bins=(180, 90), weights=mesh.cell_data['temps'])
-    
-    with np.errstate(divide='ignore', invalid='ignore'):
-        avg_temp = np.where(counts > 0, temp_sum / counts, vmin)
+    bin_values, xedges, yedges, _ = binned_statistic_2d(
+        phi_deg, z, temps, 
+        statistic='max', # Changed from average to max
+        bins=[180, 90],
+        range=[[0, 360], [1.3, 4.6]] # Explicit range to match your limits
+    )
+
+    # Replace NaNs (empty bins) with vmin
+    bin_values = np.nan_to_num(bin_values, nan=vmin)
 
     ax.set_facecolor("black")
     X, Y = np.meshgrid(xedges, yedges)
 
     if option == "binary":
+        # Ensure your norm matches the melting point used elsewhere (3695)
         cmap_bin = mpl.colors.ListedColormap(['black', 'red'])
         norm_bin = mpl.colors.BoundaryNorm([0, 3695, 10000], cmap_bin.N)
-        
-        im = ax.pcolormesh(X, Y, avg_temp.T, shading='auto', 
+        im = ax.pcolormesh(X, Y, bin_values.T, shading='flat', 
                            cmap=cmap_bin, norm=norm_bin)
     else:   
-        im = ax.pcolormesh(X, Y, avg_temp.T, shading='auto', cmap='jet',
-                       norm=mpl.colors.LogNorm(vmin=vmin, vmax=vmax))
+        im = ax.pcolormesh(X, Y, bin_values.T, shading='flat', cmap='turbo',
+                           norm=mpl.colors.LogNorm(vmin=vmin, vmax=vmax))
 
     ax.set_box_aspect(1)
     ax.set_title(title, fontsize=15)
@@ -122,7 +131,6 @@ def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
         ax.set_ylabel("Z [m]")
     
     return im
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -151,7 +159,7 @@ if __name__ == "__main__":
         # Global Horizontal Colorbar
         cax = fig3d.add_axes([0.25, 0.78, 0.5, 0.03])
         norm = mpl.colors.LogNorm(vmin=VMIN, vmax=global_vmax)
-        cb = fig3d.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='jet'), 
+        cb = fig3d.colorbar(mpl.cm.ScalarMappable(norm=norm, cmap='turbo'), 
                         cax=cax, orientation='horizontal')
         if args.option!="max_temperature":
             cb.set_label('Surface temperature [K]', labelpad=12)
