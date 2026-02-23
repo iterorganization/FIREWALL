@@ -198,7 +198,7 @@ int main(int argc, char* argv[]) {
 
             // Accumulate: E_cum = Sum(Profile * weight)
             for (size_t d = 0; d < target_depths.size(); ++d) {
-                results[i].cum_E_dep[d] += 0.1 * prof[d] * PhysConst::MeV_to_J * particles.weight[k];
+                results[i].cum_E_dep[d] += 0.1 * prof[d] * PhysConst::MeV_mm_to_J_m * particles.weight[k];
             }
         }
 

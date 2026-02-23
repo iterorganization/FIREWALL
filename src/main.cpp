@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
             // Store in dE_dx (Depth-Major)
             // dE_dx[depth_idx * count + particle_idx]
             for (size_t d = 0; d < prof.size(); ++d)
-                dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeV_to_J;  // Apply conv_factor2 here to match
+                dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeV_mm_to_J_m;  // Convert MeV/mm to Joules/m for the solver. The mm to m conversion is handled in the interpolation.
         }
 
         const auto weight_view = std::span(particles.weight).subspan(start, count);

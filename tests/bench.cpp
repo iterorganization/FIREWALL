@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
         std::vector<double> prof = interpolator.getProfile(particles.energy[j], particles.angle[j], target_depths);
         
         for (size_t d = 0; d < prof.size(); ++d)
-        dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeV_to_J;
+        dE_dx[d * n_particles + j] = prof[d] * PhysConst::MeV_mm_to_J_m;
     }
 
     std::vector<double> times;

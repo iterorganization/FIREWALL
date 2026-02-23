@@ -114,7 +114,7 @@ class Particles : public BenchParticles {
             const double p_norm = std::sqrt(vx[i] * vx[i] + vy[i] * vy[i] + vz[i] * vz[i]);
             const double pc = p_norm * PhysConst::c;
             const double m0c2 = PhysConst::m_e_u * PhysConst::c * PhysConst::c;
-            const double E = (std::sqrt(pc * pc + m0c2 * m0c2) - m0c2) * PhysConst::J_to_MeV;
+            const double E = (std::sqrt(pc * pc + m0c2 * m0c2) - m0c2) * PhysConst::AMU_m2_s2_to_MeV;
             energy[i] = E;
         }
 
