@@ -70,15 +70,15 @@ int main(int argc, char* argv[]) {
     // --- Sort and Filter ---        
     SimulationParams params(configPath);
 
-    const double L_1 = params.L / params.L_sub;
-    const double L_2 = params.L - L_1;
+    double L_1 = params.L / params.L_sub;
+    double L_2 = params.L - L_1;
 
-    const int N_x1 = static_cast<int>(L_1 / params.delta_x1);
-    const int N_x2 = static_cast<int>(L_2 / params.delta_x2);
+    int N_x1 = static_cast<int>(L_1 / params.delta_x1);
+    int N_x2 = static_cast<int>(L_2 / params.delta_x2);
 
     // Extract data for this wall element
     std::vector<double> target_depths(N_x1 + N_x2);
-    target_depths[0] = 0.0;
+    target_depths[0] = 1e-6;
     for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
         double spacing;
         if (d < N_x1 - 1)
@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
         else
         spacing = params.delta_x2;
         target_depths[d + 1] = target_depths[d] + spacing;
-    }
+    }  
     
     const Interpolator interpolator(interpPath);
     const Solver solver({}, target_depths);
