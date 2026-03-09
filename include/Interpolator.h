@@ -40,6 +40,8 @@ class Interpolator {
      */
     const std::vector<double>& getDepthsStd() const { return depths_std; }
 
+    std::vector<double> getRawProfile(double energy, double angle) const;
+    
     /**
      * @brief Sets the interpolation type.
      *
@@ -62,7 +64,7 @@ class Interpolator {
     int n_angles;   ///< Number of angle points.
     int n_depths;   ///< Number of depth points.
 
-    InterpolationType interpolationType = InterpolationType::MAKIMA;
+    InterpolationType interpolationType = InterpolationType::LINEAR;
 
     /**
      * @brief Helper to interpolate the profile vector at specific (E, A) on the standard depth grid.
@@ -106,6 +108,8 @@ class Interpolator {
      * @return double Interpolated value.
      */
     double interpolateHermite(double xi, double x0, double x1, double y0, double y1, double d0, double d1) const;
+
+
 };
 
 #endif  // INCLUDE_INTERPOLATOR_H_

@@ -29,81 +29,60 @@ void apply_permutation(std::vector<T>& data, const std::vector<size_t>& p_indice
 }
 
 /**
- * @brief Base class for particle data used in benchmarks.
+ * @brief Class for particle data.
  *
- * Stores basic particle properties like loss time, weight, energy, and angle.
- */
-class BenchParticles {
-    public:
-    std::vector<double> t_loss; ///< Time of particle loss.
-    std::vector<double> weight; ///< Particle weight.
-    std::vector<double> energy; ///< Particle energy.
-    std::vector<double> angle;  ///< Particle angle of incidence.
-    int n_particles;            ///< Total number of particles.
-
-    /**
-     * @brief Constructs BenchParticles with a given size.
-     * @param n Number of particles.
-     */
-    BenchParticles (size_t n) : t_loss(n), weight(n), energy(n), angle(n), n_particles(n) {}
-
-    /**
-     * @brief Default constructor.
-     */
-    BenchParticles () {}
-};
-
-/**
- * @brief Class for particle data loaded from HDF5 files.
- *
- * Extends BenchParticles to include wall IDs and velocity components.
  * Loads and processes particle data from a specified HDF5 file.
  */
-class Particles : public BenchParticles {
+class Particles{
     public:
-    std::vector<int> wall_id;    ///< ID of the wall element where the particle hit.
-    std::vector<double> vx;      ///< Velocity X component.
-    std::vector<double> vy;      ///< Velocity Y component.
-    std::vector<double> vz;      ///< Velocity Z component.
-    
-    /**
-     * @brief Constructs Particles object and loads data from HDF5 file.
-     *
-     * Loads particle data, calculates energy, sorts by wall ID and loss time,
-     * and filters out invalid particles.
-     *
-     * @param partPath Path to the HDF5 particles file.
-     * @throws std::runtime_error If file opening or group access fails.
-     */
-    Particles (std::string partPath){
-        hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
-        if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
+     std::vector<double> t_loss;  ///< Time of impact of particle with the wall.
+     std::vector<double> weight;  ///< Weight of each macroparticle (number of physical particles it represents).
+     std::vector<double> energy;  ///< Energy of each particle in MeV.
+     std::vector<double> angle;   ///< Angle of incidence of each particle in degrees (calculated from velocity and wall normal).
+     size_t n_particles;          ///< Total number of particles after loading and filtering.    
+     std::vector<int> wall_id;    ///< ID of the wall element where the particle hit.
+     std::vector<double> vx;      ///< Velocity X component.
+     std::vector<double> vy;      ///< Velocity Y component.
+     std::vector<double> vz;      ///< Velocity Z component.
 
-        hid_t partGroup = H5Gopen2(partFile, "groups/001", H5P_DEFAULT);
-        if (partGroup < 0) {
-            H5Fclose(partFile);
-            throw std::runtime_error("Failed to open group 'groups/001' in " + partPath);
-        }
+     /**
+      * @brief Constructs Particles object and loads data from HDF5 file.
+      *
+      * Loads particle data, calculates energy, sorts by wall ID and loss time,
+      * and filters out invalid particles.
+      *
+      * @param partPath Path to the HDF5 particles file.
+      * @throws std::runtime_error If file opening or group access fails.
+      */
+     Particles(std::string partPath) {
+         hid_t partFile = H5Fopen(partPath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT);
+         if (partFile < 0) throw std::runtime_error("Failed to open particles file: " + partPath);
 
-        std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
-        n_particles = i_elm.size();
+         hid_t partGroup = H5Gopen2(partFile, "groups/001", H5P_DEFAULT);
+         if (partGroup < 0) {
+             H5Fclose(partFile);
+             throw std::runtime_error("Failed to open group 'groups/001' in " + partPath);
+         }
 
-        printf("Total particles in file: %zu\n", n_particles);
+         std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
+         n_particles = i_elm.size();
 
-        t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
-        weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
+         printf("Total particles in file: %zu\n", n_particles);
 
-        wall_id.resize(n_particles);
-        vx.resize(n_particles);
-        vy.resize(n_particles);
-        vz.resize(n_particles);
-        energy.resize(n_particles);
-        angle.resize(n_particles);
+         t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
+         weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");
 
-        std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
+         wall_id.resize(n_particles);
+         vx.resize(n_particles);
+         vy.resize(n_particles);
+         vz.resize(n_particles);
+         energy.resize(n_particles);
+         angle.resize(n_particles);
 
-        H5Gclose(partGroup);
-        H5Fclose(partFile);
+         std::vector<double> v_flat = Utils::readH5DoubleDatasetGroup(partGroup, "v");  // Nx3 flattened
+
+         H5Gclose(partGroup);
+         H5Fclose(partFile);
 
         #pragma omp parallel for
         for (size_t i = 0; i < n_particles; ++i) {

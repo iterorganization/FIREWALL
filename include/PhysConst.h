@@ -14,6 +14,7 @@ namespace PhysConst {
     // Conversion factors can be calculated by the compiler
     constexpr double AMU_m2_s2_to_MeV = 6.24150907e12 * m_u_kg;           ///< AMU*m^2/s^2 to MeV conversion factor.
     constexpr double MeV_mm_to_J_m = 1.602176634e-10;         ///< MeV to Joules conversion factor.
+    constexpr double J_to_MeV = 6.24150907e12;              ///< Joules to MeV conversion factor.
 }
 
 #endif  // PHYS_CONST_H

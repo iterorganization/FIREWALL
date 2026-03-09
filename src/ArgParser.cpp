@@ -18,7 +18,6 @@ void BenchArgParser::printUsage(const char* progName) {
     std::cout << "Usage: " << progName << " [options]\n"
               << "Options:\n"
               << "  --config <path>    Path to configuration file (default: " << DEFAULT_CONFIG << ")\n"
-              << "  --part <path>      Path to particles HDF5 file (default: " << DEFAULT_PART << ")\n"
               << "  --interp <path>    Path to interpolation data HDF5 file (default: " << DEFAULT_INTERP << ")\n"
               << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
               << "  --help, -h         Show this help message\n";
@@ -39,12 +38,6 @@ BenchArgParser::Args BenchArgParser::parse(int argc, char* argv[]) {
                 args.configPath = argv[++i];
             } else {
                 throw std::runtime_error("Error: --config requires a path argument.");
-            }
-        } else if (arg == "--part") {
-            if (i + 1 < argc) {
-                args.partPath = argv[++i];
-            } else {
-                throw std::runtime_error("Error: --part requires a path argument.");
             }
         } else if (arg == "--interp") {
             if (i + 1 < argc) {
