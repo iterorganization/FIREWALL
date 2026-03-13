@@ -73,5 +73,25 @@ double readH5DoubleScalar(hid_t location_id, const std::string& datasetName);
  */
 size_t getNumParticles(const std::string& partPath);
 
+// Reads a CSV file with headers into a map of column name -> vector of doubles
+// Assumes all columns are numeric
+
+/**
+ * @brief Structure to hold data read from a CSV file.
+ */
+struct CSVData {
+    std::vector<std::string> headers;          ///< Column headers.
+    std::vector<std::vector<double>> columns;  ///< Data organized by column.
+    int numRows;                               ///< Number of rows in the CSV.
+};
+
+/**
+ * @brief Reads a CSV file containing numeric data.
+ *
+ * @param filename Path to the CSV file.
+ * @return CSVData Structure containing the CSV data.
+ */
+CSVData readCSV(const std::string& filename);
+}  // namespace Utils
 
 #endif  // INCLUDE_UTILS_H_
