@@ -12,13 +12,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 plt.rcParams.update({
     "font.family": "serif",
-    "font.size": 13,
-    "axes.labelsize": 15
+    "font.size": 18,
+    "axes.labelsize": 24
 })
 
 # Fixed Parameters
 R0, Z0 = 5.2, 0.1
-VMIN, VMAX_DEFAULT = 301, 1500 # Adjust VMAX_DEFAULT as needed
+VMIN, VMAX_DEFAULT = 299, 1500 # Adjust VMAX_DEFAULT as needed
 
 def read_wallinput(wallin):
     if not os.path.exists(wallin):
@@ -84,20 +84,25 @@ def plot_3d_subplot(ax, mesh, r0, z0, phicam, title, vmin, vmax, option):
     p.show(auto_close=False)
     ax.imshow(p.image)
     ax.axis("off")
-    ax.text(0.02, 0.98, title, transform=ax.transAxes, 
-            color='white', fontsize=15, fontweight='bold', va='top', ha='left')
     p.close()
 
 def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
     centers = mesh.cell_centers().points
     phi_deg = np.rad2deg(np.arctan2(centers[:, 1], centers[:, 0])) % 360
     z = centers[:, 2]
+    temps = mesh.cell_data['temps']
+
+    from scipy.stats import binned_statistic_2d
     
-    counts, xedges, yedges = np.histogram2d(phi_deg, z, bins=(180, 90))
-    temp_sum, _, _ = np.histogram2d(phi_deg, z, bins=(180, 90), weights=mesh.cell_data['temps'])
-    
-    with np.errstate(divide='ignore', invalid='ignore'):
-        avg_temp = np.where(counts > 0, temp_sum / counts, vmin)
+    bin_values, xedges, yedges, _ = binned_statistic_2d(
+        phi_deg, z, temps, 
+        statistic='max', # Changed from average to max
+        bins=[180, 90],
+        range=[[0, 360], [1.3, 4.6]] # Explicit range to match your limits
+    )
+
+    # Replace NaNs (empty bins) with vmin
+    bin_values = np.nan_to_num(bin_values, nan=vmin)
 
     ax.set_facecolor("black")
     X, Y = np.meshgrid(xedges, yedges)
@@ -105,15 +110,13 @@ def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
     if option == "binary":
         cmap_bin = mpl.colors.ListedColormap(['black', 'red'])
         norm_bin = mpl.colors.BoundaryNorm([0, 3695, 10000], cmap_bin.N)
-        
-        im = ax.pcolormesh(X, Y, avg_temp.T, shading='auto', 
+        im = ax.pcolormesh(X, Y, bin_values.T, shading='flat', 
                            cmap=cmap_bin, norm=norm_bin)
     else:   
-        im = ax.pcolormesh(X, Y, avg_temp.T, shading='auto', cmap='jet',
-                       norm=mpl.colors.LogNorm(vmin=vmin, vmax=vmax))
+        im = ax.pcolormesh(X, Y, bin_values.T, shading='flat', cmap='turbo',
+                           norm=mpl.colors.LogNorm(vmin=vmin, vmax=vmax))
 
     ax.set_box_aspect(1)
-    ax.set_title(title, fontsize=15)
     ax.set_xlim(0, 360)
     ax.set_ylim(1.3,4.6)
     ax.set_xticks([0, 90, 180, 270, 360])
@@ -127,18 +130,17 @@ def plot_dist_subplot(ax, mesh, title, vmin, vmax, option):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--wall_file", help = "Path to wall geometry HDF5 file", required=True)
-    parser.add_argument("--results_files", help = "Path to results HDF5 file", required=True)
+    parser.add_argument("--results_file", help = "Path to the results HDF5 file", required=True)
     parser.add_argument("--option", choices=["last_time", "max_temperature", "first_melt", "binary"], default="last_time", help="Plotting option: 'last_time' for final step, 'max_temperature' for max temperatures reached over simulation, 'first_melt' for first time step where any cell > 3695K, 'binary' for melt/no-melt")
-    parser.add_argument("--phi_cam", type=lambda x: float(eval(x, {"np": np, "pi": np.pi})), default=0.0, help="Camera angle in radians (e.g., 0, 10*np.pi/180)")
+    parser.add_argument("--phi_cam", type=lambda x: np.radians(float(eval(x, {"np": np, "pi": np.pi}))), default=0.0, help="Camera angle in degrees (e.g., 0, 10, 45, 90).")
     parser.add_argument("--live", action="store_true", help="Animate temperature over time")
     args = parser.parse_args()
 
     base_mesh = read_wallinput(args.wall_file)
-
     if args.live:
         from matplotlib.animation import FuncAnimation
         # --- Optimized Live Animation ---
-        with h5py.File(args.results_files, 'r') as h5:
+        with h5py.File(args.results_file, 'r') as h5:
             all_temps = h5['surf_temp'][:]
             wall_ids = (h5['wall_ids'][:] - 1).astype(int)
             total_steps = all_temps.shape[1]
@@ -199,10 +201,10 @@ if __name__ == "__main__":
         p.close()
 
     else:
-        mesh = read_temps(args.results_files, base_mesh, args.option)
+        mesh = read_temps(args.results_file, base_mesh, args.option)
         temps = mesh.cell_data['temps']
-        global_vmax = temps.max() if args.option != "binary" else 1.0
-        
+        #global_vmax = temps.max() if args.option != "binary" else 1.0
+        global_vmax = 3695
         # --- 3D Plotting (Single Plot) ---
         fig3d, ax3d = plt.subplots(figsize=(10, 10))
         plot_3d_subplot(ax3d, mesh, R0, Z0, args.phi_cam, "3D View", VMIN, global_vmax, args.option)
@@ -211,7 +213,18 @@ if __name__ == "__main__":
             # Simplified colorbar for a single plot
             norm = mpl.colors.LogNorm(vmin=VMIN, vmax=global_vmax)
             sm = mpl.cm.ScalarMappable(norm=norm, cmap='jet')
-            cb3d = fig3d.colorbar(sm, ax=ax3d, orientation='horizontal', fraction=0.046, pad=0.04)
+            ticks_to_show = [300, 500, 1000, 1500, 2500, 3695]
+            cb3d = fig3d.colorbar(
+                sm, 
+                ax=ax3d, 
+                orientation='horizontal', 
+                location='top', 
+                fraction=0.08, 
+                pad=0.04, 
+                ticks=ticks_to_show
+            )
+            # Force the labels to match the ticks exactly
+            cb3d.ax.set_xticklabels([str(t) for t in ticks_to_show])
             label = 'Maximal surface temperature [K]' if args.option == "max_temperature" else 'Surface temperature [K]'
             cb3d.set_label(label)
         
@@ -221,9 +234,12 @@ if __name__ == "__main__":
         im2d = plot_dist_subplot(ax2d, mesh, "Temperature Distribution", VMIN, global_vmax, args.option)
         
         if args.option != "binary":
+            ticks_to_show = [300, 500, 1000, 1500, 2500, 3695]
             # Standard colorbar attachment
-            cb2d = fig2d.colorbar(im2d, ax=ax2d)
+            cb2d = fig2d.colorbar(im2d, ax=ax2d, fraction=0.1, aspect=15, ticks=ticks_to_show)
+            cb2d.ax.set_yticklabels([str(t) for t in ticks_to_show])
             cb2d.set_label('Surface temperature [K]')
         
         fig2d.tight_layout()
         plt.show()
+

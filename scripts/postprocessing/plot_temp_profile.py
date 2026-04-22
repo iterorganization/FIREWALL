@@ -5,6 +5,7 @@ import numpy as np
 import os
 from matplotlib.animation import FuncAnimation
 
+
 def run_live_animation(ids, times, depths, data_list, split=False):
     """
     Handles live animation with dynamic time display and optimized Y-limits.
