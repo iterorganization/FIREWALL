@@ -74,6 +74,7 @@ struct Result {
     int wall_id;
     std::vector<double> surf_temp;
     std::vector<std::vector<double>> full_profile;
+    double energy_fraction = 1.0;
     bool store_full = false;
 };
 
@@ -215,6 +216,8 @@ int main(int argc, char* argv[]) {
 
         // Interpolate Profile
         std::vector<double> dE_dx(target_depths.size() * count);
+        std::vector<double> cum_E_dep_total(target_depths.size());
+
 
         for (size_t j = start; j < end; ++j) {
             // Interpolate for this particle
@@ -222,14 +225,64 @@ int main(int argc, char* argv[]) {
 
             // Store in dE_dx (Depth-Major)
             // dE_dx[depth_idx * count + particle_idx]
-            for (size_t d = 0; d < prof.size(); ++d)
+            for (size_t d = 0; d < prof.size(); ++d){
                 dE_dx[d * count + (j - start)] = prof[d] * PhysConst::MeV_mm_to_J_m;  // Convert MeV/mm to Joules/m for the solver. The mm to m conversion is handled in the interpolation.
+                cum_E_dep_total[d] += prof[d] * PhysConst::MeV_mm_to_J_m * particles.weight[j];
+            }
         }
 
         const auto weight_view = std::span(particles.weight).subspan(start, count);
         const auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
 
         solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, out_T);
+
+        double t_melt = 1e20;  // Default to infinity
+        bool melted = false;
+        double T_melt = 3695.0;
+
+        for (size_t tstep = 0; tstep < times.size(); ++tstep) {
+            results[i].surf_temp.push_back(out_T[tstep][0]);
+            if (!melted && out_T[tstep][0] >= T_melt) {
+                t_melt = times[tstep];
+                melted = true;
+            }
+        }
+
+        if (melted) {
+            std::vector<double> cum_E_dep_melt(target_depths.size(), 0.0);
+            for (size_t j = start; j < end; ++j) {
+                // Include particle only if it arrived before or at the surface melting time
+                if (particles.t_loss[j] <= t_melt) {
+                    for (size_t d = 0; d < target_depths.size(); ++d) {
+                        cum_E_dep_melt[d] += dE_dx[d * count + (j - start)] * particles.weight[j];
+                    }
+                }
+            }
+
+            // --- Numerical Integration over depth (0 to L) using Trapezoidal Rule ---
+            double integral_melt = 0.0;
+            double integral_total = 0.0;
+
+            for (size_t d = 0; d < target_depths.size() - 1; ++d) {
+                double dx = target_depths[d + 1] - target_depths[d];
+
+                // Average the energy density between point d and d+1
+                double avg_melt = (cum_E_dep_melt[d] + cum_E_dep_melt[d + 1]) * 0.5;
+                double avg_total = (cum_E_dep_total[d] + cum_E_dep_total[d + 1]) * 0.5;
+
+                integral_melt += avg_melt * dx;
+                integral_total += avg_total * dx;
+            }
+
+            // Compute fraction: Integral of energy at melting / Integral of total energy
+            if (integral_total > 0) {
+                results[i].energy_fraction = integral_melt / integral_total;
+            } else {
+                results[i].energy_fraction = 1.0;
+            }
+        } else {
+            results[i].energy_fraction = 1.0;  // 100% if it never reaches T_melt
+        }
 
         results[i].surf_temp.resize(times.size());
 
@@ -251,9 +304,11 @@ int main(int argc, char* argv[]) {
 
     std::vector<double> wall_ids_out(selected_wall_ids.size());
     std::vector<double> surf_temps_out(selected_wall_ids.size() * times.size());
+    std::vector<double> energy_fractions_out(selected_wall_ids.size());
 
     for (int i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
+        energy_fractions_out[i] = results[i].energy_fraction;
         for (size_t t = 0; t < times.size(); ++t) {
             surf_temps_out[i * times.size() + t] = results[i].surf_temp[t];
         }
@@ -301,6 +356,10 @@ int main(int argc, char* argv[]) {
     hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
     H5Dclose(ds1);
+
+    hid_t ds_frac = H5Dcreate2(resFile, "energy_fraction", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(ds_frac, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, energy_fractions_out.data());
+    H5Dclose(ds_frac);
 
     hid_t ds2 = H5Dcreate2(resFile, "surf_temp", H5T_NATIVE_DOUBLE, space2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds2, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, surf_temps_out.data());
