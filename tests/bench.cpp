@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
 
     // Extract data for this wall element
     std::vector<double> target_depths(N_x1 + N_x2);
-    target_depths[0] = 1e-6;
+    target_depths[0] = 0.0;
     for (int d = 0; d < (N_x1 + N_x2) - 1; ++d) {
         double spacing;
         if (d < N_x1 - 1)
