@@ -2,9 +2,9 @@
 T_ini: 300
 dt_small: 1e-7
 dt_large: 1e-3
-t_dep: 1e-6
-t_start: 0.051744
-t_end: 0.053095
+t_dep: 1e-7
+t_start: 0.05197494601
+t_end: 0.05311493008459378
 t_interm: 0.0
 L: 24e-3
 L_sub: 10.0

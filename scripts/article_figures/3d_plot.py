@@ -156,7 +156,7 @@ if __name__ == "__main__":
     plot_3d_subplot(axes[1, 0], m_j4_t, R0, Z0, phi_j4, "last_time")
     plot_3d_subplot(axes[1, 1], m_j4_e, R0, Z0, phi_j4, "energy_fraction")
 
-    plt.tight_layout(rect=[0, 0.0, 1, 0.92], h_pad=5.0)
+    plt.tight_layout(rect=[0, 0.0, 1, 0.96], h_pad=0.05)
 
     def get_col_center_and_width(ax):
         bbox = ax.get_position()
@@ -192,46 +192,30 @@ if __name__ == "__main__":
     plt.show()
 
 
-    # --- NEW FIGURE: 2x2 Distribution Plots (Colorbars at top, No titles) ---
-    fig_dist, axes_dist = plt.subplots(2, 2, figsize=(12, 11))
+    # --- NEW FIGURE: 1x2 Temperature Distribution Plots ---
+    fig_dist, axes_dist = plt.subplots(1, 2, figsize=(12, 6))
 
-    # Row 0: J2 Results (Titles removed)
-    im_j2_t = plot_dist_subplot(axes_dist[0, 0], m_j2_t, "", VMIN, VMAX_TEMP, "last_time")
-    im_j2_e = plot_dist_subplot(axes_dist[0, 1], m_j2_e, "", 0.0, 100, "energy_fraction")
+    # Plot J2 and J4 temperature distributions
+    im_j2_t = plot_dist_subplot(axes_dist[0], m_j2_t, "", VMIN, VMAX_TEMP, "last_time")
+    im_j4_t = plot_dist_subplot(axes_dist[1], m_j4_t, "", VMIN, VMAX_TEMP, "last_time")
 
-    # Row 1: J4 Results
-    im_j4_t = plot_dist_subplot(axes_dist[1, 0], m_j4_t, "", VMIN, VMAX_TEMP, "last_time")
-    im_j4_e = plot_dist_subplot(axes_dist[1, 1], m_j4_e, "", 0.0, 100, "energy_fraction")
+    # Tighten layout, leaving more room at the top (0.80 instead of 0.85)
+    plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.85])
 
-    # Adjust layout to make room for top colorbars
-    plt.tight_layout(rect=[0.1, 0.0, 0.9, 0.92], h_pad=1.0)
-
-    # Helper to align colorbars with columns
-    def get_col_pos(ax):
-        bbox = ax.get_position()
-        return bbox.x0, bbox.width
-
-    cbar_width = 0.30
-    cbar_height = 0.02
-    dist_top_y = 0.92
-
-    # --- Left Column Colorbar: Temperature ---
-    x0_l, w_l = get_col_pos(axes_dist[0, 0])
-    cax_dist_t = fig_dist.add_axes([x0_l + (w_l - cbar_width) / 2, dist_top_y, cbar_width, cbar_height])
+    # Shared colorbar for the two plots
+    # Increased height from 0.03 to 0.04 to give text more breathing room
+    cbar_ax = fig_dist.add_axes([0.25, 0.86, 0.5, 0.04]) 
     
-    # Using the same discrete ticks as your 3D plot for consistency
     temp_ticks = [300, 500, 1000, 2000, 3695]
-    cb_dist_t = fig_dist.colorbar(im_j2_t, cax=cax_dist_t, orientation='horizontal', ticks=temp_ticks)
-    cb_dist_t.ax.set_xticklabels([str(t) for t in temp_ticks])
-    cb_dist_t.set_label("Max Surface Temperature [K]", labelpad=-50)
-    cax_dist_t.xaxis.set_ticks_position('top')
-
-    # --- Right Column Colorbar: Energy Fraction ---
-    x0_r, w_r = get_col_pos(axes_dist[0, 1])
-    cax_dist_e = fig_dist.add_axes([x0_r + (w_r - cbar_width) / 2, dist_top_y, cbar_width, cbar_height])
+    cb_dist_t = fig_dist.colorbar(im_j2_t, cax=cbar_ax, orientation='horizontal', ticks=temp_ticks)
     
-    cb_dist_e = fig_dist.colorbar(im_j2_e, cax=cax_dist_e, orientation='horizontal')
-    cb_dist_e.set_label("Energy Fraction [%]", labelpad=-50)
-    cax_dist_e.xaxis.set_ticks_position('top')
+    cb_dist_t.ax.set_xticklabels([str(t) for t in temp_ticks], fontsize=10)
+    cbar_ax.set_xlim(300, 3695)
+    
+    # Adjust labelpad to pull the label away from the ticks (positive values move it up)
+    cb_dist_t.set_label("Max Surface Temperature [K]", labelpad=10)
+    
+    cbar_ax.xaxis.set_ticks_position('top')
+    cbar_ax.xaxis.set_label_position('top')
 
     plt.show()
