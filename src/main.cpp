@@ -78,12 +78,28 @@ struct Result {
     bool store_full = false;
 };
 
+void make_splash() {
+    std::cout << "\n";
+    std::cout << "  I tell her, \"Baby, baby, baby, baby, baby, baby,\n";
+    std::cout << "  baby, baby, baby, I'm a...\"\n";
+    std::cout << "\n";
+    std::cout << R"(  ███████╗██╗██████╗ ███████╗██╗    ██╗ █████╗ ██╗     ██╗     )" << "\n";
+    std::cout << R"(  ██╔════╝██║██╔══██╗██╔════╝██║    ██║██╔══██╗██║     ██║     )" << "\n";
+    std::cout << R"(  █████╗  ██║██████╔╝█████╗  ██║ █╗ ██║███████║██║     ██║     )" << "\n";
+    std::cout << R"(  ██╔══╝  ██║██╔══██╗██╔══╝  ██║███╗██║██╔══██║██║     ██║     )" << "\n";
+    std::cout << R"(  ██║     ██║██║  ██║███████╗╚███╔███╔╝██║  ██║███████╗███████╗)" << "\n";
+    std::cout << R"(  ╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚══════╝)" << "\n";
+    std::cout << "\n";
+}
+
 int main(int argc, char* argv[]) {
     ArgParser::Args args = ArgParser::parse(argc, argv);
     if (args.help) {
         ArgParser::printUsage(argv[0]);
         return 0;
     }
+
+    make_splash();
 
     // --- Configuration Output ---
     std::cout << "Configuration:\n"
