@@ -25,6 +25,7 @@ using v = std::vector<fpType>;
 using vv = std::vector<std::vector<fpType>>;
 using vvv = std::vector<std::vector<std::vector<fpType>>>;
 
+// Helper function to get the ranges of particles for each selected wall ID.
 std::vector<std::pair<size_t, size_t>> get_particle_ranges(const Particles& particles, const std::vector<int>& selected_wall_ids) {
     int N_select = selected_wall_ids.size();
     std::vector<std::pair<size_t, size_t>> ranges(N_select);
@@ -46,7 +47,7 @@ std::vector<std::pair<size_t, size_t>> get_particle_ranges(const Particles& part
     return ranges;
 }
 
-
+// Helper function to construct the target depth grid based on simulation parameters.
 std::vector<double> construct_target_depths(const SimulationParams& params) {
     double L_1 = params.L / params.L_sub;
     double L_2 = params.L - L_1;
@@ -69,7 +70,7 @@ std::vector<double> construct_target_depths(const SimulationParams& params) {
     return target_depths;
 }
     
-
+// Helper struct to hold the results for each wall ID.
 struct Result {
     int wall_id;
     std::vector<double> surf_temp;
@@ -78,6 +79,7 @@ struct Result {
     bool store_full = false;
 };
 
+// Splash screen for the FIREWALL simulation.
 void make_splash() {
     std::cout << "\n";
     std::cout << "  I tell her, \"Baby, baby, baby, baby, baby, baby,\n";
@@ -127,6 +129,7 @@ int main(int argc, char* argv[]) {
         }
         std::cout << "\n";
     }
+    std::cout << "  Store mode:  " << (args.storeAllTimes ? "All timesteps" : "Last timestep only") << "\n";
 
     // --- Load Data ---
     std::cout << "Loading data..." << std::endl;
@@ -185,7 +188,8 @@ int main(int argc, char* argv[]) {
     std::vector<double> times;
     times.push_back(params.t_start);
     while (times.back() < params.t_end) times.push_back(times.back() + (times.back() >= params.t_interm && params.t_interm > params.t_start ? params.dt_large : params.dt_small) );
-        
+    
+    // --- Initialize Interpolator and Solver ---
     const Interpolator interpolator(args.interpPath);
     const Solver solver({}, target_depths);  // Empty material for now.
     std::vector<Result> results(selected_wall_ids.size());
@@ -210,8 +214,6 @@ int main(int argc, char* argv[]) {
                                    selected_full_profile_wall_ids.end(),
                                    wid) != selected_full_profile_wall_ids.end();
 
-        // Offset check was here but NormVec is computed outside now. 
-        // We can check validity of wid still if needed, but NormVec construction likely assumed valid.
         
         const NormVec norm_vec(wall.data(), wid * 9);
 
@@ -250,6 +252,7 @@ int main(int argc, char* argv[]) {
         const auto weight_view = std::span(particles.weight).subspan(start, count);
         const auto t_loss_view = std::span(particles.t_loss).subspan(start, count);
 
+        // Solve the heat equation for this wall element
         solver.solve(dE_dx, weight_view, t_loss_view, params, coeff, times, out_T);
 
         double t_melt = 1e20;  // Default to infinity
@@ -257,7 +260,6 @@ int main(int argc, char* argv[]) {
         double T_melt = 3695.0;
 
         for (size_t tstep = 0; tstep < times.size(); ++tstep) {
-            results[i].surf_temp.push_back(out_T[tstep][0]);
             if (!melted && out_T[tstep][0] >= T_melt) {
                 t_melt = times[tstep];
                 melted = true;
@@ -302,12 +304,22 @@ int main(int argc, char* argv[]) {
 
         results[i].surf_temp.resize(times.size());
 
-        for (size_t tstep = 0; tstep < times.size(); ++tstep)
-            results[i].surf_temp[tstep] = out_T[tstep][0];
+        if (args.storeAllTimes) {
+            results[i].surf_temp.resize(times.size());
+            for (size_t tstep = 0; tstep < times.size(); ++tstep)
+                results[i].surf_temp[tstep] = out_T[tstep][0];
+        } else {
+            results[i].surf_temp.resize(1);
+            results[i].surf_temp[0] = out_T.back()[0];
+        }
 
         if (keep_full) {
             results[i].store_full = true;
-            results[i].full_profile = std::move(out_T);  // Move the whole 2D grid
+            if (args.storeAllTimes) {
+                results[i].full_profile = std::move(out_T);  // full history: [time][depth]
+            } else {
+                results[i].full_profile = {out_T.back()};  // only the last timestep: [1][depth]
+            }
         }
 
         results[i].wall_id = wid;
@@ -318,56 +330,69 @@ int main(int argc, char* argv[]) {
     hid_t resFile = H5Fcreate(args.outPath.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     if (resFile < 0) throw std::runtime_error("Failed to create result file");
 
+    const size_t n_out_times = args.storeAllTimes ? times.size() : 1;
+
     std::vector<double> wall_ids_out(selected_wall_ids.size());
-    std::vector<double> surf_temps_out(selected_wall_ids.size() * times.size());
+    std::vector<double> surf_temps_out(selected_wall_ids.size() * n_out_times);
     std::vector<double> energy_fractions_out(selected_wall_ids.size());
 
     for (int i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
         energy_fractions_out[i] = results[i].energy_fraction;
-        for (size_t t = 0; t < times.size(); ++t) {
-            surf_temps_out[i * times.size() + t] = results[i].surf_temp[t];
+        for (size_t t = 0; t < n_out_times; ++t) {
+            surf_temps_out[i * n_out_times + t] = results[i].surf_temp[t];
         }
     }
 
     hid_t group = H5Gcreate2(resFile, "full_profiles", H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-    hsize_t dims_2d[2] = {times.size(), target_depths.size()};
-
     for (const auto& res : results) {
         if (res.store_full) {
-            // Flatten the 2D vector [time][depth] into a contiguous buffer for HDF5
-            std::vector<double> flat_buf(times.size() * target_depths.size());
-            for (size_t t = 0; t < times.size(); ++t) {
-                for (size_t d = 0; d < target_depths.size(); ++d) {
-                    flat_buf[t * target_depths.size() + d] = res.full_profile[t][d];
-                }
+            std::string ds_name = std::to_string(res.wall_id);
+
+            const size_t n_rows = res.full_profile.size();  // 1, or times.size()
+            const size_t n_cols = target_depths.size();
+
+            // Flatten row-major [row][col] -> contiguous buffer for H5Dwrite
+            std::vector<double> flat(n_rows * n_cols);
+            for (size_t r = 0; r < n_rows; ++r)
+                for (size_t c = 0; c < n_cols; ++c)
+                    flat[r * n_cols + c] = res.full_profile[r][c];
+
+            hid_t space;
+            if (args.storeAllTimes) {
+                hsize_t dims_2d[2] = {(hsize_t)n_rows, (hsize_t)n_cols};
+                space = H5Screate_simple(2, dims_2d, NULL);
+            } else {
+                hsize_t dims_1d[1] = {(hsize_t)n_cols};
+                space = H5Screate_simple(1, dims_1d, NULL);
             }
 
-            // Use the wall ID as the dataset name
-            std::string ds_name = std::to_string(res.wall_id);
-            
-            hid_t space_2d = H5Screate_simple(2, dims_2d, NULL);
-            hid_t dataset = H5Dcreate2(group, ds_name.c_str(), H5T_NATIVE_DOUBLE, space_2d, 
-                                    H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-            
-            H5Dwrite(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, flat_buf.data());
-            
+            hid_t dataset = H5Dcreate2(group, ds_name.c_str(), H5T_NATIVE_DOUBLE, space,
+                                       H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+
+            H5Dwrite(dataset, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, flat.data());
+
             H5Dclose(dataset);
-            H5Sclose(space_2d);
+            H5Sclose(space);
         }
     }
 
-
     // Write datasets
     hsize_t dims_wid[1] = {(hsize_t)selected_wall_ids.size()};
-    hsize_t dims_temp[2] = {(hsize_t)selected_wall_ids.size(), (hsize_t)times.size()};
-    hsize_t dims_time[1] = {(hsize_t)times.size()};
+    hsize_t dims_time[1] = {(hsize_t)n_out_times};
     hsize_t dims_depth[1] = {(hsize_t)target_depths.size()};
     hid_t space1 = H5Screate_simple(1, dims_wid, NULL);
-    hid_t space2 = H5Screate_simple(2, dims_temp, NULL);
     hid_t space3 = H5Screate_simple(1, dims_time, NULL);
     hid_t space4 = H5Screate_simple(1, dims_depth, NULL);
+
+    hid_t space2;
+    if (args.storeAllTimes) {
+        hsize_t dims_temp[2] = {(hsize_t)selected_wall_ids.size(), (hsize_t)n_out_times};
+        space2 = H5Screate_simple(2, dims_temp, NULL);
+    } else {
+        space2 = H5Screate_simple(1, dims_wid, NULL);  // flat (n_walls,)
+    }
 
     hid_t ds1 = H5Dcreate2(resFile, "wall_ids", H5T_NATIVE_DOUBLE, space1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     H5Dwrite(ds1, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wall_ids_out.data());
@@ -382,7 +407,12 @@ int main(int argc, char* argv[]) {
     H5Dclose(ds2);
 
     hid_t ds3 = H5Dcreate2(resFile, "times", H5T_NATIVE_DOUBLE, space3, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, times.data());
+    if (args.storeAllTimes) {
+        H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, times.data());
+    } else {
+        double last_time = times.back();
+        H5Dwrite(ds3, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, &last_time);
+    }
     H5Dclose(ds3);
 
     hid_t ds4 = H5Dcreate2(group, "depths", H5T_NATIVE_DOUBLE, space4, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);

@@ -1,3 +1,7 @@
+#!/usr/bin/env python3
+
+# Post-processing script for visualizing in-depth temperature profiles of walls. It reads temperature data from HDF5 files and generates either static plots or live animations of the temperature profiles over time. The script supports both overlaying multiple wall IDs in a single plot or creating separate subplots for each wall ID.
+
 import argparse
 import h5py
 import matplotlib.pyplot as plt
@@ -98,7 +102,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--results_file", required=True, help="Path to HDF5 file containing full in-depth temperature profiles for selected wall IDs")
     parser.add_argument("--wall_ids", help="Comma-separated IDs or .txt file")
-    parser.add_argument("--time_idx", type=int, default=0, help="Time index to plot for static snapshot (ignored if --live is set)")
+    parser.add_argument("--time_idx", type=int, default=0, help="Time index to plot for static snapshot (ignored if --live is set; only index 0 is valid unless the file was produced with --store_all_times)")
     parser.add_argument("--live", action="store_true", help="Animate temperature profiles over time")
     parser.add_argument("--split", action="store_true", help="Create separate subplots for each Wall ID instead of overlaying, can be used with --live or static")
     args = parser.parse_args()
@@ -119,21 +123,39 @@ if __name__ == "__main__":
         if not target_ids: target_ids = available_ids
 
         valid_ids = []
-        all_data = [] # Stores (time, depth) arrays
+        all_data = []  # Stores (time, depth) arrays
 
         for wid in target_ids:
             path = f'full_profiles/{wid}'
             if path in f:
                 valid_ids.append(wid)
-                all_data.append(f[path][:])
+                d = f[path][:]
+                if d.ndim == 1:
+                    # Last-time-only mode: single depth profile -> add time axis for uniform handling
+                    d = d[np.newaxis, :]
+                all_data.append(d)
             else:
                 print(f"Warning: ID {wid} not found.")
 
         if not valid_ids:
             print("No valid Wall IDs to plot."); exit()
 
+        n_times_available = all_data[0].shape[0]
+
         if args.live:
-            run_live_animation(valid_ids, times, depths, all_data, split=args.split)
+            if n_times_available < 2:
+                print("Warning: results file only contains the last timestep "
+                      "(re-run FIREWALL with --store_all_times to enable animation). "
+                      "Falling back to a static snapshot.")
+                profiles_at_t = [d[0, :] for d in all_data]
+                plot_snapshots(valid_ids, times[0], depths, profiles_at_t, split=args.split)
+            else:
+                run_live_animation(valid_ids, times, depths, all_data, split=args.split)
         else:
-            profiles_at_t = [d[args.time_idx, :] for d in all_data]
-            plot_snapshots(valid_ids, times[args.time_idx], depths, profiles_at_t, split=args.split)
+            idx = args.time_idx
+            if idx >= n_times_available:
+                print(f"Warning: --time_idx {idx} out of range "
+                      f"(file has {n_times_available} timestep(s)); using index 0.")
+                idx = 0
+            profiles_at_t = [d[idx, :] for d in all_data]
+            plot_snapshots(valid_ids, times[idx], depths, profiles_at_t, split=args.split)

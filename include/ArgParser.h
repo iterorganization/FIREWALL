@@ -54,6 +54,7 @@ public:
         std::string wallPath;     ///< Path to the wall geometry file.
         std::vector<int> wallIds; ///< List of wall IDs to process.
         std::vector<int> fullProfileWallIds; ///< List of wall IDs to store full profiles for.
+        bool storeAllTimes = false;          ///< If true, store surface temperature/profiles for every timestep (default: only the last timestep).
     };
 
     /**

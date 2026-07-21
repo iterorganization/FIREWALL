@@ -73,6 +73,7 @@ void ArgParser::printUsage(const char* progName) {
               << "  --out <path>       Path to output HDF5 file (default: " << DEFAULT_OUT << ")\n"
               << "  --walls <list>     Comma-separated list of wall IDs to process (default: all)\n"
               << "  --full_profile_walls <list>     Comma-separated list of wall IDs to store full profiles for (default: none)\n"
+              << "  --store_all_times  Store surface temperature and full profiles for every timestep (default: only the last timestep)\n"
               << "  --help, -h         Show this help message\n";
 }
 
@@ -197,6 +198,8 @@ ArgParser::Args ArgParser::parse(int argc, char* argv[]) {
             } else {
                 throw std::runtime_error("Error: --walls requires a list or a file path.");
             }
+        } else if (arg == "--store_all_times") {
+            args.storeAllTimes = true;
         } else if (arg == "--help" || arg == "-h") {
             args.help = true;
             return args;

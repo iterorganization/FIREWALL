@@ -1,5 +1,6 @@
 /**
  * Module for setting the material properties of Tungsten (W).
+ * The material properties are based on the recommendations of: P. Tolias, "Analytical expressions for thermophysical properties of solid and liquid tungsten relevant for fusion applications", Nuclear Materials and Energy 13, 42-57 (2017), https://doi.org/10.1016/j.nme.2017.08.002.
  */
 
 #include "Material.h"

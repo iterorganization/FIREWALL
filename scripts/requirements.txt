@@ -1,3 +1,5 @@
 scipy
 h5py
+numpy
+matplotlib
 pyvista
