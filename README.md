@@ -18,10 +18,11 @@ The official FIREWALL paper is TO BE ADDED.
 ## Requirements
 
 To compile FIREWALL, you need to have the following software installed:
-*   **C++ Compiler**: Must support **C++20**.
+*   **C++ Compiler**: Must support **C++23**.
 *   **CMake**: Version 3.20 or later.
 *   **HDF5 Library**: C component required.
 *   **OpenMP**: Recommended for parallel execution.
+*   **OpenMPI**: For parallel hdf5 support.
 
 Additionally, to use the post-processing Python scripts, you need the following Python packages:
 *   **scipy**
