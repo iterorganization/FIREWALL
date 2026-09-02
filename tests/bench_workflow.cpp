@@ -198,7 +198,7 @@ int main(int argc, char* argv[]) {
 
             // Accumulate: E_cum = Sum(Profile * weight)
             for (size_t d = 0; d < target_depths.size(); ++d) {
-                results[i].cum_E_dep[d] += 0.1 * prof[d] * PhysConst::MeV_mm_to_J_m * particles.weight[k];
+                results[i].cum_E_dep[d] += prof[d] * PhysConst::MeV_mm_to_J_m * particles.weight[k];
             }
         }
 
@@ -219,6 +219,13 @@ int main(int argc, char* argv[]) {
                 }
             }
             if (found_melt) break;  // Only need the *first* time it hits melting
+        }
+
+        if (!found_melt) {
+            // Never reached melting: store the profile at the final time step instead.
+            results[i].profile_at_melting = out_T.back();
+            // results[i].melting_time stays at its default (-1.0), so you can still
+            // distinguish "profile at melting" from "profile at last time step" downstream.
         }
     }
 
@@ -243,7 +250,7 @@ int main(int argc, char* argv[]) {
         first_impacts[i] = results[i].first_impact_time;
         melting_times[i] = results[i].melting_time;
 
-        if (results[i].melting_time > 0 && !results[i].profile_at_melting.empty()) {
+        if (!results[i].profile_at_melting.empty()) {
             for (size_t d = 0; d < target_depths.size(); ++d) {
                 all_melt_profiles[i * target_depths.size() + d] = results[i].profile_at_melting[d];
             }
