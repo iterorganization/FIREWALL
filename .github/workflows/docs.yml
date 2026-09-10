@@ -1,0 +1,71 @@
+name: Documentation
+
+# Publishes the Doxygen API documentation to GitHub Pages.
+#
+# NOTE FOR MAINTAINERS: this workflow uses the official GitHub Pages deployment
+# actions rather than pushing to a gh-pages branch. Before the first run, set
+#   Settings -> Pages -> Build and deployment -> Source = "GitHub Actions"
+# The old gh-pages branch can then be deleted.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # doxygen-awesome-css is a submodule and the Doxyfile references its
+      # stylesheet, so it must be checked out or the theme is silently dropped.
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Doxygen
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y doxygen graphviz
+
+      # Paths in docs/Doxyfile are relative to the repository root.
+      - name: Build documentation
+        run: doxygen docs/Doxyfile
+
+      - name: Check that API pages were actually produced
+        run: |
+          count=$(find docs/html -name 'class*.html' | wc -l)
+          echo "Generated $count class pages."
+          if [ "$count" -eq 0 ]; then
+            echo "::error::Doxygen produced no API pages - check INPUT in docs/Doxyfile."
+            exit 1
+          fi
+
+      # Pull requests stop here: the documentation is built and checked, but
+      # the Pages artifact is only worth producing for a run that deploys.
+      - uses: actions/upload-pages-artifact@v3
+        if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+        with:
+          path: docs/html
+
+  deploy:
+    # Only publish from the default branch; pull requests just build.
+    if: github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

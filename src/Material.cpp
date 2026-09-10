@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 constexpr double unphysical_value_T = 1e4;
 
@@ -16,7 +17,7 @@ constexpr double unphysical_value_T = 1e4;
 Material::Material() {}
 
 /**
- * Retreive the thermal conductivity of W at given temperature.
+ * Retrieve the thermal conductivity of W at given temperature.
  *
  * T : Temperature at which thermal conductivity is evaluated.
  */
@@ -30,13 +31,13 @@ double Material::getK(double T) const {
         return 66.6212 + 0.02086 * deltaT - (3.7585e-6) * (deltaT * deltaT);
     }
     else {
-        printf("Warning: Temperature %.2f K is below valid range for getK(). Returning 0.0.\n", T); // Debug info
+        std::fprintf(stderr, "Warning: Temperature %.2f K is below valid range for getK(). Returning 0.0.\n", T); // Debug info
         return 0.0;
     }
 }
 
 /**
- * Retreive the mass density of W at given temperature.
+ * Retrieve the mass density of W at given temperature.
  *
  * T : Temperature at which mass density is evaluated.
  */
@@ -53,13 +54,13 @@ double Material::getRho(double T) const {
         return conv * (16.267 - (7.679e-4) * dT - (8.091e-8) * (dT * dT));
     }
     else {
-        printf("Warning: Temperature %.2f K is below valid range for getRho(). Returning 0.0.\n", T); // Debug info
+        std::fprintf(stderr, "Warning: Temperature %.2f K is below valid range for getRho(). Returning 0.0.\n", T); // Debug info
         return 0.0;
     }
 }
 
 /**
- * Retreive the heat capacity of W at given temperature.
+ * Retrieve the heat capacity of W at given temperature.
  *
  * T : Temperature at which heat capacity is evaluated.
  */
@@ -75,7 +76,7 @@ double Material::getCp(double T) const {
         return conv * 51.3;
     }
     else {
-        printf("Warning: Temperature %.2f K is below valid range for getCp(). Returning 0.0.\n", T); // Debug info
+        std::fprintf(stderr, "Warning: Temperature %.2f K is below valid range for getCp(). Returning 0.0.\n", T); // Debug info
         return 0.0;
     }
 

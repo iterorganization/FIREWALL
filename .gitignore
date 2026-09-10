@@ -1,9 +1,7 @@
 data/**
 results/**
 build/**
-*.sh
 .vscode/**
-!tests/run_pipeline.sh
 
 # pipeline artifacts
 tests/data/**

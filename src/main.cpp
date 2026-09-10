@@ -148,11 +148,6 @@ int main(int argc, char* argv[]) {
 
     SimulationParams params(args.configPath);
 
-    double L_1 = params.L / params.L_sub;
-    double L_2 = params.L - L_1;
-
-    int N_x1 = static_cast<int>(L_1 / params.delta_x1);
-    int N_x2 = static_cast<int>(L_2 / params.delta_x2);
     // --- Prepare Interpolator and Material ---
     
     std::vector<int> selected_wall_ids;
@@ -197,12 +192,13 @@ int main(int argc, char* argv[]) {
 
 
     // --- Parallel Loop ---
+    const int n_selected = static_cast<int>(selected_wall_ids.size());
     #pragma omp parallel for schedule(dynamic)
-    for (int i = 0; i < selected_wall_ids.size(); ++i) {
+    for (int i = 0; i < n_selected; ++i) {
         vv out_T (times.size(), v(target_depths.size(), 0.0));
     
         // Save T[:, 0]
-        for (int xi = 0; xi < target_depths.size(); xi++) 
+        for (size_t xi = 0; xi < target_depths.size(); xi++)
             out_T[0][xi] = params.T_ini;
 
         const int wid = selected_wall_ids[i];
@@ -336,7 +332,7 @@ int main(int argc, char* argv[]) {
     std::vector<double> surf_temps_out(selected_wall_ids.size() * n_out_times);
     std::vector<double> energy_fractions_out(selected_wall_ids.size());
 
-    for (int i = 0; i < selected_wall_ids.size(); ++i) {
+    for (size_t i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
         energy_fractions_out[i] = results[i].energy_fraction;
         for (size_t t = 0; t < n_out_times; ++t) {

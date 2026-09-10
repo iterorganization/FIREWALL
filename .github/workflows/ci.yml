@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gcc
+            cc: gcc
+            cxx: g++
+            packages: ""
+          - name: clang
+            cc: clang
+            cxx: clang++
+            packages: libomp-dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            cmake libhdf5-dev hdf5-tools ${{ matrix.packages }}
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  # End-to-end regression: downloads the test dataset from Zenodo, runs the
+  # full pipeline and compares against the committed reference result.
+  # Run on demand only: it pulls 88.5 MB from an external service, which is
+  # too much to put on the per-push path.
+  pipeline:
+    name: pipeline (end-to-end)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            cmake libhdf5-dev hdf5-tools unzip python3-pip
+
+      - name: Install Python requirements
+        run: python3 -m pip install --upgrade pip && python3 -m pip install -r scripts/requirements.txt
+
+      - name: Run pipeline
+        run: ./tests/run_pipeline.sh
