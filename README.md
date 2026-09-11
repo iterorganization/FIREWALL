@@ -101,6 +101,20 @@ requirements, and is run with:
 ./tests/run_pipeline.sh
 ```
 
+## Input data
+
+The input datasets are not stored in this repository. They are fetched from
+Zenodo on demand:
+
+```bash
+scripts/fetch_data.py            # everything the pipeline needs
+scripts/fetch_data.py --list     # where each dataset comes from
+```
+
+See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for what each dataset is,
+how to point one at a different Zenodo record, and the open question about
+redistribution of the ITER wall geometry.
+
 ## Documentation
 
 The API documentation is published at

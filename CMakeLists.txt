@@ -96,6 +96,15 @@ if(BUILD_TESTING)
     add_test(NAME benching_help COMMAND benching --help)
     add_test(NAME benching_workflow_help COMMAND benching_workflow --help)
 
+    # Offline tests for the Zenodo dataset fetcher: they serve a miniature
+    # Zenodo API on the loopback interface, so no network access is needed.
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME fetch_data
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fetch_data.py)
+    endif()
+
     # End-to-end regression against the committed reference result. It needs the
     # test dataset from Zenodo, so it is opt-in via -DFIREWALL_ENABLE_PIPELINE_TEST=ON.
     option(FIREWALL_ENABLE_PIPELINE_TEST

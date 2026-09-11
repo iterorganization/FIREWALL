@@ -12,8 +12,9 @@ echo "Running from: $(pwd)"
 # Define paths
 TEST_DIR="tests"
 DATA_DIR="${TEST_DIR}/data"
-ZIP_FILE="${TEST_DIR}/J2_data.zip"
 MAT_FILE="${DATA_DIR}/3deg7T.mat"
+WALL_FILE="${DATA_DIR}/newiterwall_offset10cm.h5"
+PART_FILE="${DATA_DIR}/part_out_eta_10x_fo.h5"
 INTERP_FILE="${DATA_DIR}/interpolation_data.h5"
 BUILD_DIR="build"
 OUTPUT_FILE="${TEST_DIR}/results/results.h5"
@@ -21,19 +22,12 @@ REF_FILE="${TEST_DIR}/results/pipeline_results.h5"
 
 echo "Starting pipeline..."
 
-# 1. Download and unzip
-echo "Step 1: Downloading data..."
-if [ ! -d "$DATA_DIR" ]; then
-    mkdir -p "$TEST_DIR"
-    curl -L -o "$ZIP_FILE" https://zenodo.org/records/18391920/files/J2_data.zip
-    
-    echo "Unzipping data..."
-    # Unzip into tests directory. Assuming the zip contains a 'data' folder or we need to organize it.
-    # Based on user prompt: "unzip it, it will create a data folder"
-    unzip -o "$ZIP_FILE" -d "$TEST_DIR"
-else
-    echo "Data directory exists. Skipping download."
-fi
+# 1. Fetch the input datasets
+# Each dataset is described in tests/data_sources.json with its own Zenodo
+# record, provenance and checksums; see docs/DATA_SOURCES.md. The fetcher
+# verifies checksums and skips anything already present.
+echo "Step 1: Fetching data..."
+python3 scripts/fetch_data.py --dest "$DATA_DIR"
 
 # 2. Prepare data
 echo "Step 2: Preparing interpolation data..."
@@ -54,8 +48,8 @@ echo "Step 4: Running simulation..."
 /usr/bin/time -f "Real: %E \nUser: %U \nSys: %S" \
     ./"$BUILD_DIR"/firewall \
     --config examples/config.txt \
-    --wall "${DATA_DIR}/newiterwall_offset10cm.h5" \
-    --part "${DATA_DIR}/part_out_eta_10x_fo.h5" \
+    --wall "$WALL_FILE" \
+    --part "$PART_FILE" \
     --interp "$INTERP_FILE" \
     --out "$OUTPUT_FILE" \
 

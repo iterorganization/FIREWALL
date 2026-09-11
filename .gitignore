@@ -5,6 +5,7 @@ build/**
 
 # pipeline artifacts
 tests/data/**
+tests/.cache/**
 tests/J2_data.zip
 tests/results/results.h5
 
