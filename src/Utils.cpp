@@ -97,7 +97,7 @@ struct IterData {
     size_t max_size;
 };
 
-herr_t find_max_dataset_cb(hid_t group_id, const char* name, const H5L_info_t* info, void* op_data) {
+herr_t find_max_dataset_cb(hid_t group_id, const char* name, const H5L_info_t* /*info*/, void* op_data) {
     IterData* data = static_cast<IterData*>(op_data);
     
     // Try to open as dataset
@@ -148,6 +148,10 @@ size_t getNumParticles(const std::string& partPath) {
 
     H5Gclose(group_id);
     H5Fclose(file_id);
+
+    if (status < 0) {
+        throw std::runtime_error("Failed to iterate over group 'groups/001' in " + partPath);
+    }
 
     if (data.max_size == 0) {
          throw std::runtime_error("No valid dataset found in 'groups/001' to determine particle count.");

@@ -1,8 +1,9 @@
 #ifndef PARTICLE_H
 #define PARTICLE_H
 
-#include <vector>
+#include <cstdio>
 #include <string>
+#include <vector>
 #include <hdf5.h>
 #include <cmath>
 
@@ -67,7 +68,7 @@ class Particles{
          std::vector<int> i_elm = Utils::readH5IntDatasetGroup(partGroup, "i_elm");
          n_particles = i_elm.size();
 
-         printf("Total particles in file: %zu\n", n_particles);
+         std::printf("Total particles in file: %zu\n", n_particles);
 
          t_loss = Utils::readH5DoubleDatasetGroup(partGroup, "t_loss");
          weight = Utils::readH5DoubleDatasetGroup(partGroup, "weight");

@@ -63,8 +63,10 @@ void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<do
     size_t width = active_mask.size();
 
     // Parallelize over spatial grid
+    const int n_nodes = static_cast<int>(src.size());
+    const int n_width = static_cast<int>(width);
     #pragma omp parallel for schedule(static)
-    for (int i = 0; i < src.size(); ++i) {
+    for (int i = 0; i < n_nodes; ++i) {
         double s = 0.0;
         
         // Hoist the row offset calculation out of the inner loop
@@ -77,7 +79,7 @@ void Solver::compute_source(const std::vector<double>& dE_dx, const std::span<do
         // Note: explicit 'omp simd' guides the compiler, but -O3 often does this automatically 
         // if the branch is gone.
         #pragma omp simd reduction(+:s)
-        for (int j = 0; j < width; ++j) {
+        for (int j = 0; j < n_width; ++j) {
             // Branchless version:
             // If active_mask[j] is 0, the term becomes 0.0
             s += dE_dx[row_offset + j] * weights[j] * active_mask[j];
@@ -283,10 +285,10 @@ void Solver::solve(const std::vector<double>& dE_dx, const std::span<double>& we
     std::vector<double> src(out_T[0].size(), 0.0);
 
     
-    for (int i = 1; i < times.size(); ++i) {
+    for (size_t i = 1; i < times.size(); ++i) {
         
         // Active mask
-        for (int j = 0; j < coll_times.size(); ++j) {
+        for (size_t j = 0; j < coll_times.size(); ++j) {
             active_mask[j] = (coll_times[j] <= times[i]) && (times[i] <= (coll_times[j] + params.t_dep));
         }
         

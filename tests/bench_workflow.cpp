@@ -114,11 +114,6 @@ int main(int argc, char* argv[]) {
 
     SimulationParams params(args.configPath);
 
-    double L_1 = params.L / params.L_sub;
-    double L_2 = params.L - L_1;
-
-    int N_x1 = static_cast<int>(L_1 / params.delta_x1);
-    int N_x2 = static_cast<int>(L_2 / params.delta_x2);
     // --- Prepare Interpolator and Material ---
 
     std::vector<int> selected_wall_ids;
@@ -131,8 +126,6 @@ int main(int argc, char* argv[]) {
 
         if (selected_wall_ids.empty()) std::cerr << "Warning: None of the requested wall IDs were found.\n";
     }
-
-    std::vector<int> selected_full_profile_wall_ids = selected_wall_ids;  // By default, store full profiles for all selected walls
 
     std::cout << "Processing " << selected_wall_ids.size() << " elements using OpenMP..." << std::endl;
     std::cout << "Max threads: " << omp_get_max_threads() << std::endl;
@@ -157,17 +150,13 @@ int main(int argc, char* argv[]) {
         vv out_T(times.size(), v(target_depths.size(), 0.0));
 
         // Save T[:, 0]
-        for (int xi = 0; xi < target_depths.size(); xi++)
+        for (size_t xi = 0; xi < target_depths.size(); xi++)
             out_T[0][xi] = params.T_ini;
 
         const int wid = selected_wall_ids[i];
         const size_t start = ranges[i].first;
         const size_t end = ranges[i].second;
         const size_t count = end - start;
-
-        bool keep_full = std::find(selected_full_profile_wall_ids.begin(),
-                                   selected_full_profile_wall_ids.end(),
-                                   wid) != selected_full_profile_wall_ids.end();
 
         // Initialize result structure for this wall element
         results[i].wall_id = wid;
@@ -242,7 +231,7 @@ int main(int argc, char* argv[]) {
     // Create a 2D matrix flattened into 1D for energy profiles: [num_walls * num_depths]
     std::vector<double> all_cum_E(selected_wall_ids.size() * target_depths.size());
 
-    for (int i = 0; i < selected_wall_ids.size(); ++i) {
+    for (size_t i = 0; i < selected_wall_ids.size(); ++i) {
         wall_ids_out[i] = static_cast<double>(results[i].wall_id);
         for (size_t d = 0; d < target_depths.size(); ++d) {
             all_cum_E[i * target_depths.size() + d] = results[i].cum_E_dep[d];

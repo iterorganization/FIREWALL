@@ -2,7 +2,7 @@
 
 This repository contains the Fast Integrated Runaway Electron WALL loads (FIREWALL) code.
 
-**FIREWALL** is a surrogate model that enables a quick assessment of volumetric wall heating by runaway electrons, taking into account the energy and incidence angles of the incoming particles and realistic 3D wall geometry. Specifically, FIREWALL solves multiple time-dependent 1D heat diffusion equationsfor every mesh triangle in a realitic tokamak 3D wall geometry employing a Finite Volume Method with an implicit time integration scheme to handle the non-linear material properties and stiff source terms efficiently. FIREWALL can be coupled to the JOREK code or other runaway electron modelling codes.
+**FIREWALL** is a surrogate model that enables a quick assessment of volumetric wall heating by runaway electrons, taking into account the energy and incidence angles of the incoming particles and realistic 3D wall geometry. Specifically, FIREWALL solves multiple time-dependent 1D heat diffusion equations for every mesh triangle in a realistic tokamak 3D wall geometry employing a Finite Volume Method with an implicit time integration scheme to handle the non-linear material properties and stiff source terms efficiently. FIREWALL can be coupled to the JOREK code or other runaway electron modelling codes.
 
 The official FIREWALL paper is TO BE ADDED.
 
@@ -18,11 +18,11 @@ The official FIREWALL paper is TO BE ADDED.
 ## Requirements
 
 To compile FIREWALL, you need to have the following software installed:
-*   **C++ Compiler**: Must support **C++23**.
+*   **C++ Compiler**: Must support **C++20** (e.g. GCC 10+, Clang 13+).
 *   **CMake**: Version 3.20 or later.
-*   **HDF5 Library**: C component required.
-*   **OpenMP**: Recommended for parallel execution.
-*   **OpenMPI**: For parallel hdf5 support.
+*   **HDF5 Library**: C component required (the serial build is sufficient).
+*   **OpenMP**: Required. `<omp.h>` is used unconditionally, so a build without
+    OpenMP will not link.
 
 Additionally, to use the post-processing Python scripts, you need the following Python packages:
 *   **scipy**
@@ -30,6 +30,21 @@ Additionally, to use the post-processing Python scripts, you need the following 
 *   **numpy**
 *   **matplotlib**
 *   **pyvista**
+
+## Getting the code
+
+The documentation theme is a git submodule, so clone recursively:
+
+```bash
+git clone --recurse-submodules https://github.com/iterorganization/FIREWALL.git
+cd FIREWALL
+```
+
+If you have already cloned without `--recurse-submodules`, fetch the submodule with:
+
+```bash
+git submodule update --init --recursive
+```
 
 ## Compilation
 
@@ -68,9 +83,51 @@ In the command line, add the following arguments:
 ```
 
 The post-processing Python scripts are run via the command line in a similar way.
+
+## Testing
+
+After building, run the smoke tests with:
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+The full end-to-end regression downloads the test dataset from Zenodo, runs the
+pipeline and compares the surface temperatures against a committed reference
+result. It needs network access, `h5diff` (from `hdf5-tools`) and the Python
+requirements, and is run with:
+
+```bash
+./tests/run_pipeline.sh
+```
+
+## Input data
+
+The input datasets are not stored in this repository. They are fetched from
+Zenodo on demand:
+
+```bash
+scripts/fetch_data.py            # everything the pipeline needs
+scripts/fetch_data.py --list     # where each dataset comes from
+```
+
+See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for what each dataset is,
+how to point one at a different Zenodo record, and the open question about
+redistribution of the ITER wall geometry.
+
 ## Documentation
 
-Full API documentation is available in the `docs/html` directory. Open `index.html` in your browser to view it.
+The API documentation is published at
+<https://iterorganization.github.io/FIREWALL/>.
+
+To build it locally you need Doxygen (and Graphviz for the diagrams). Paths in
+`docs/Doxyfile` are relative to the repository root, so run it from there:
+
+```bash
+doxygen docs/Doxyfile
+```
+
+This writes the HTML into `docs/html`; open `docs/html/index.html` to view it.
 
 ## Citing FIREWALL
 
