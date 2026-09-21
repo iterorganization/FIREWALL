@@ -112,7 +112,8 @@ int main(int argc, char* argv[]) {
     if (resFile < 0) throw std::runtime_error("Failed to create result file: " + outPath);
 
     // Write datasets out_T_1 and out_T_2 (out_Nx, out_Nt) and out_times (out_Nt) and depths_m (out_Nx)
-    hid_t space_T_1 = H5Screate_simple(2, (hsize_t[]){static_cast<hsize_t>(target_depths.size()), static_cast<hsize_t>(times.size())}, NULL);
+    const hsize_t dims_T_1[2] = {static_cast<hsize_t>(target_depths.size()), static_cast<hsize_t>(times.size())};
+    hid_t space_T_1 = H5Screate_simple(2, dims_T_1, NULL);
     hid_t dset_T_1 = H5Dcreate2(resFile, "temperature_1", H5T_IEEE_F64LE, space_T_1, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     std::vector<double> out_T_1_flat;
     std::vector<double> out_T_2_flat;
@@ -127,7 +128,8 @@ int main(int argc, char* argv[]) {
     H5Dclose(dset_T_1);
     H5Sclose(space_T_1);
 
-    hid_t space_T_2 = H5Screate_simple(2, (hsize_t[]){static_cast<hsize_t>(target_depths.size()), static_cast<hsize_t>(times.size())}, NULL);
+    const hsize_t dims_T_2[2] = {static_cast<hsize_t>(target_depths.size()), static_cast<hsize_t>(times.size())};
+    hid_t space_T_2 = H5Screate_simple(2, dims_T_2, NULL);
     hid_t dset_T_2 = H5Dcreate2(resFile, "temperature_2", H5T_IEEE_F64LE, space_T_2, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
     // Flatten out_T_2 for HDF5 writing
     H5Dwrite(dset_T_2, H5T_IEEE_F64LE, H5S_ALL, H5S_ALL, H5P_DEFAULT, out_T_2_flat.data());
