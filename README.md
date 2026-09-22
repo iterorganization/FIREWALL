@@ -138,3 +138,18 @@ If you use FIREWALL in your publications, please cite the FIREWALL article: TO B
 The code is developed and coordinated by the research unit Magneto-hydrodynamics and fast particles [MHD](https://www.ipp.mpg.de/5035213/mhd) at the Max Planck Institute for Plasma Physics.
 
 The original idea for FIREWALL was proposed by [Svetlana Ratynskaia](https://www.kth.se/profile/srat?l=en) and [Matthias Hölzl](https://www.ipp.mpg.de/person/139800). Victor Johan Svensson developed the first version of the code.
+
+## License
+
+Copyright (c) 2026, ITER Organization
+
+Copyright (c) 2026, KTH Royal Institute of Technology
+
+Copyright (c) 2026, Max-Planck-Institut für Plasmaphysik
+
+FIREWALL is distributed under the GNU Lesser General Public License v3.0. The
+full text is in [LICENSE.txt](LICENSE.txt).
+
+LGPL-3.0 applies the terms of the GNU General Public License v3.0 together with
+the additional permissions set out in LICENSE.txt; the GPL-3.0 text is available
+at <https://www.gnu.org/licenses/gpl-3.0.txt>.
